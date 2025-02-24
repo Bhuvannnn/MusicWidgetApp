@@ -39,4 +39,24 @@ public struct SpotifyAPI {
             }.resume()
         }.resume()
     }
+    
+    public static func playPause() {
+        guard let token = userDefaults.string(forKey: accessTokenKey) else { return }
+        
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/play")!)
+        request.httpMethod = "PUT"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        URLSession.shared.dataTask(with: request).resume()
+    }
+    
+    public static func nextTrack() {
+        guard let token = userDefaults.string(forKey: accessTokenKey) else { return }
+        
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/next")!)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        URLSession.shared.dataTask(with: request).resume()
+    }
 }

@@ -8,37 +8,39 @@
 import WidgetKit
 import SwiftUI
 
-struct Provider: AppIntentTimelineProvider {
+struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: ConfigurationAppIntent())
+        SimpleEntry(date: Date(), emoji: "😀")
     }
 
-    func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
-        SimpleEntry(date: Date(), configuration: configuration)
+    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
+        let entry = SimpleEntry(date: Date(), emoji: "😀")
+        completion(entry)
     }
-    
-    func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
         var entries: [SimpleEntry] = []
 
         // Generate a timeline consisting of five entries an hour apart, starting from the current date.
         let currentDate = Date()
         for hourOffset in 0 ..< 5 {
             let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, configuration: configuration)
+            let entry = SimpleEntry(date: entryDate, emoji: "😀")
             entries.append(entry)
         }
 
-        return Timeline(entries: entries, policy: .atEnd)
+        let timeline = Timeline(entries: entries, policy: .atEnd)
+        completion(timeline)
     }
 
-//    func relevances() async -> WidgetRelevances<ConfigurationAppIntent> {
+//    func relevances() async -> WidgetRelevances<Void> {
 //        // Generate a list containing the contexts this widget is relevant in.
 //    }
 }
 
 struct SimpleEntry: TimelineEntry {
     let date: Date
-    let configuration: ConfigurationAppIntent
+    let emoji: String
 }
 
 struct MusicWidgetExtensionEntryView : View {
@@ -46,11 +48,13 @@ struct MusicWidgetExtensionEntryView : View {
 
     var body: some View {
         VStack {
-            Text("Time:")
-            Text(entry.date, style: .time)
+            HStack {
+                Text("Time:")
+                Text(entry.date, style: .time)
+            }
 
-            Text("Favorite Emoji:")
-            Text(entry.configuration.favoriteEmoji)
+            Text("Emoji:")
+            Text(entry.emoji)
         }
     }
 }
@@ -59,9 +63,17 @@ struct MusicWidgetExtension: Widget {
     let kind: String = "MusicWidgetExtension"
 
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: kind, intent: ConfigurationAppIntent.self, provider: Provider()) { entry in
-            MusicWidgetExtensionEntryView(entry: entry)
-                .containerBackground(.fill.tertiary, for: .widget)
+        StaticConfiguration(kind: kind, provider: Provider()) { entry in
+            if #available(macOS 14.0, *) {
+                MusicWidgetExtensionEntryView(entry: entry)
+                    .containerBackground(.fill.tertiary, for: .widget)
+            } else {
+                MusicWidgetExtensionEntryView(entry: entry)
+                    .padding()
+                    .background()
+            }
         }
+        .configurationDisplayName("My Widget")
+        .description("This is an example widget.")
     }
 }
