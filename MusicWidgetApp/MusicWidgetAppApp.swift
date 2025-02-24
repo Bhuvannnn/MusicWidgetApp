@@ -1,17 +1,16 @@
-//
-//  MusicWidgetAppApp.swift
-//  MusicWidgetApp
-//
-//  Created by Bhuvan Shah on 2/23/25.
-//
-
 import SwiftUI
 
 @main
 struct MusicWidgetAppApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+        }
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .help) {}
         }
     }
 }
