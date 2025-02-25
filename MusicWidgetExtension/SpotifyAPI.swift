@@ -6,9 +6,9 @@ public struct SpotifyAPI {
     private static let userDefaults = UserDefaults(suiteName: "group.com.yourname.MusicWidgetApp")!
     private static let accessTokenKey = "spotifyAccessToken"
     
-    public static func fetchNowPlaying(completion: @escaping (String?, String?, Error?) -> Void) {
+    public static func fetchNowPlaying(completion: @escaping (String?, String?, URL?, Error?) -> Void) {
         guard let token = userDefaults.string(forKey: accessTokenKey) else {
-            completion(nil, nil, nil)
+            completion(nil, nil, nil, nil)
             return
         }
 
@@ -17,7 +17,7 @@ public struct SpotifyAPI {
 
         URLSession.shared.dataTask(with: request) { data, response, error in
             guard let data = data, error == nil else {
-                completion(nil, nil, error)
+                completion(nil, nil, nil, error)
                 return
             }
             
@@ -27,9 +27,13 @@ public struct SpotifyAPI {
                 let songTitle = item?["name"] as? String
                 let artists = item?["artists"] as? [[String: Any]]
                 let artistName = artists?.first?["name"] as? String
-                completion(songTitle, artistName, nil)
+                let album = item?["album"] as? [String: Any]
+                let images = album?["images"] as? [[String: Any]]
+                let imageUrlString = images?.first?["url"] as? String
+                let albumArtworkURL = URL(string: imageUrlString ?? "")
+                completion(songTitle, artistName, albumArtworkURL, nil)
             } catch {
-                completion(nil, nil, error)
+                completion(nil, nil, nil, error)
             }
         }.resume()
     }
