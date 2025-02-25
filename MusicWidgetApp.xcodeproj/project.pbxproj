@@ -58,6 +58,13 @@
 			);
 			target = 551D48A22D6C22B4006AEDFA /* MusicWidgetExtensionExtension */;
 		};
+		553E74392D6D6D0700323DE6 /* Exceptions for "MusicWidgetApp" folder in "MusicWidgetApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 55849D722D6BE969009E72C3 /* MusicWidgetApp */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -71,6 +78,9 @@
 		};
 		55849D752D6BE969009E72C3 /* MusicWidgetApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				553E74392D6D6D0700323DE6 /* Exceptions for "MusicWidgetApp" folder in "MusicWidgetApp" target */,
+			);
 			path = MusicWidgetApp;
 			sourceTree = "<group>";
 		};
@@ -80,11 +90,6 @@
 				551D48BE2D6C24F5006AEDFA /* Exceptions for "MusicWidgetExtension" folder in "MusicWidgetExtensionExtension" target */,
 			);
 			path = MusicWidgetExtension;
-			sourceTree = "<group>";
-		};
-		55849DD02D6BEC2F009E72C3 /* Helpers */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Helpers;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -113,7 +118,6 @@
 			isa = PBXGroup;
 			children = (
 				55849D752D6BE969009E72C3 /* MusicWidgetApp */,
-				55849DD02D6BEC2F009E72C3 /* Helpers */,
 				55849D8F2D6BE9E5009E72C3 /* MusicWidgetExtension */,
 				551D48A62D6C22B4006AEDFA /* MusicWidgetExtension */,
 				55849D8A2D6BE9E5009E72C3 /* Frameworks */,
@@ -180,7 +184,6 @@
 			);
 			fileSystemSynchronizedGroups = (
 				55849D752D6BE969009E72C3 /* MusicWidgetApp */,
-				55849DD02D6BEC2F009E72C3 /* Helpers */,
 			);
 			name = MusicWidgetApp;
 			packageProductDependencies = (

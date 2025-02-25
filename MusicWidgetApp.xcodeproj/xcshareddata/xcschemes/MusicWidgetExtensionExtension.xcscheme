@@ -16,7 +16,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "55849D882D6BE9E5009E72C3"
+               BlueprintIdentifier = "551D48A22D6C22B4006AEDFA"
                BuildableName = "MusicWidgetExtensionExtension.appex"
                BlueprintName = "MusicWidgetExtensionExtension"
                ReferencedContainer = "container:MusicWidgetApp.xcodeproj">
