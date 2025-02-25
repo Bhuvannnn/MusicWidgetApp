@@ -65,12 +65,20 @@
 			);
 			target = 55849D722D6BE969009E72C3 /* MusicWidgetApp */;
 		};
+		553E743B2D6D703400323DE6 /* Exceptions for "MusicWidgetExtension" folder in "MusicWidgetApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				SpotifyAPI.swift,
+			);
+			target = 55849D722D6BE969009E72C3 /* MusicWidgetApp */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		551D48A62D6C22B4006AEDFA /* MusicWidgetExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
+				553E743B2D6D703400323DE6 /* Exceptions for "MusicWidgetExtension" folder in "MusicWidgetApp" target */,
 				551D48B22D6C22B5006AEDFA /* Exceptions for "MusicWidgetExtension" folder in "MusicWidgetExtensionExtension" target */,
 			);
 			path = MusicWidgetExtension;
