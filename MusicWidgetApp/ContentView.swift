@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 struct ContentView: View {
     @StateObject private var auth = SpotifyAuth.shared
@@ -62,15 +63,18 @@ struct ContentView: View {
     }
 
     private func fetchNowPlaying() {
+        print("Fetching now playing data in ContentView...")
         SpotifyAPI.fetchNowPlaying { songTitle, artistName, albumArtworkURL, _ in
+            print("Fetched data in ContentView: songTitle=\(songTitle ?? "nil"), artistName=\(artistName ?? "nil")")
             self.songTitle = songTitle
             self.artistName = artistName
             self.albumArtworkURL = albumArtworkURL
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 
     private func startTimer() {
-        Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
+        Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { _ in // Refresh every 30 seconds
             fetchNowPlaying()
         }
     }

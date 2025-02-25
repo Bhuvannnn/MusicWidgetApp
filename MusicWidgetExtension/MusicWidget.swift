@@ -1,6 +1,6 @@
 import WidgetKit
 import SwiftUI
-import AppIntents  // Add this import
+import AppIntents
 
 struct MusicWidgetEntry: TimelineEntry {
     let date: Date
@@ -86,23 +86,5 @@ struct MusicWidget: Widget {
         .configurationDisplayName("Music Widget")
         .description("Displays current Spotify playback")
         .supportedFamilies([.systemSmall])
-    }
-}
-
-struct PlayPauseIntent: AppIntent {
-    static var title: LocalizedStringResource = "Play/Pause"
-    
-    func perform() async throws -> some IntentResult {
-        SpotifyAPI.playPause()
-        return .result()
-    }
-}
-
-struct NextTrackIntent: AppIntent {
-    static var title: LocalizedStringResource = "Next Track"
-    
-    func perform() async throws -> some IntentResult {
-        SpotifyAPI.nextTrack()
-        return .result()
     }
 }

@@ -9,38 +9,38 @@ import WidgetKit
 import SwiftUI
 
 struct Provider: TimelineProvider {
-    func placeholder(in context: Context) -> SimpleEntry {
-        SimpleEntry(date: Date(), emoji: "😀")
+    func placeholder(in context: Context) -> MusicWidgetEntry {
+        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Song Title", artistName: "Artist", albumArtworkURL: nil)
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> ()) {
-        let entry = SimpleEntry(date: Date(), emoji: "😀")
+    func getSnapshot(in context: Context, completion: @escaping (MusicWidgetEntry) -> Void) {
+        let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Song Title", artistName: "Artist", albumArtworkURL: nil)
         completion(entry)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
-        var entries: [SimpleEntry] = []
-
-        // Generate a timeline consisting of five entries an hour apart, starting from the current date.
-        let currentDate = Date()
-        for hourOffset in 0 ..< 5 {
-            let entryDate = Calendar.current.date(byAdding: .hour, value: hourOffset, to: currentDate)!
-            let entry = SimpleEntry(date: entryDate, emoji: "😀")
-            entries.append(entry)
+    func getTimeline(in context: Context, completion: @escaping (Timeline<MusicWidgetEntry>) -> Void) {
+        print("Fetching now playing data...")
+        SpotifyAPI.fetchNowPlaying { songTitle, artistName, albumArtworkURL, error in
+            if let error = error {
+                print("Error fetching now playing data: \(error)")
+                let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Error", artistName: "Error", albumArtworkURL: nil)
+                let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30)))
+                completion(timeline)
+                return
+            }
+            
+            print("Fetched data: songTitle=\(songTitle ?? "nil"), artistName=\(artistName ?? "nil")")
+            let entry = MusicWidgetEntry(
+                date: Date(),
+                isPlaying: true,
+                songTitle: songTitle,
+                artistName: artistName,
+                albumArtworkURL: albumArtworkURL
+            )
+            let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30))) // Refresh every 30 seconds
+            completion(timeline)
         }
-
-        let timeline = Timeline(entries: entries, policy: .atEnd)
-        completion(timeline)
     }
-
-//    func relevances() async -> WidgetRelevances<Void> {
-//        // Generate a list containing the contexts this widget is relevant in.
-//    }
-}
-
-struct SimpleEntry: TimelineEntry {
-    let date: Date
-    let emoji: String
 }
 
 struct MusicWidgetExtensionEntryView : View {
@@ -48,14 +48,39 @@ struct MusicWidgetExtensionEntryView : View {
 
     var body: some View {
         VStack {
-            HStack {
-                Text("Time:")
-                Text(entry.date, style: .time)
+            if let song = entry.songTitle, let artist = entry.artistName {
+                if let url = entry.albumArtworkURL {
+                    AsyncImage(url: url) { image in
+                        image.resizable()
+                    } placeholder: {
+                        Color.gray
+                    }
+                    .frame(width: 50, height: 50)
+                    .cornerRadius(8)
+                }
+                Text(song)
+                    .font(.headline)
+                Text(artist)
+                    .font(.subheadline)
+                
+                HStack {
+                    Button(intent: PlayPauseIntent()) {
+                        Image(systemName: entry.isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(intent: NextTrackIntent()) {
+                        Image(systemName: "forward.fill")
+                    }
+                    .buttonStyle(.plain)
+                }
+            } else {
+                Text("Not Playing")
+                    .font(.headline)
             }
-
-            Text("Emoji:")
-            Text(entry.emoji)
         }
+        .padding()
+        .containerBackground(.fill.tertiary, for: .widget)
     }
 }
 
@@ -64,16 +89,10 @@ struct MusicWidgetExtension: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            if #available(macOS 14.0, *) {
-                MusicWidgetExtensionEntryView(entry: entry)
-                    .containerBackground(.fill.tertiary, for: .widget)
-            } else {
-                MusicWidgetExtensionEntryView(entry: entry)
-                    .padding()
-                    .background()
-            }
+            MusicWidgetExtensionEntryView(entry: entry)
         }
-        .configurationDisplayName("My Widget")
-        .description("This is an example widget.")
+        .configurationDisplayName("Music Widget")
+        .description("Displays current Spotify playback")
+        .supportedFamilies([.systemSmall])
     }
 }

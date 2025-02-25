@@ -16,3 +16,21 @@ struct ConfigurationAppIntent: WidgetConfigurationIntent {
     @Parameter(title: "Favorite Emoji", default: "😃")
     var favoriteEmoji: String
 }
+
+struct PlayPauseIntent: AppIntent {
+    static var title: LocalizedStringResource = "Play/Pause"
+    
+    func perform() async throws -> some IntentResult {
+        SpotifyAPI.playPause()
+        return .result()
+    }
+}
+
+struct NextTrackIntent: AppIntent {
+    static var title: LocalizedStringResource = "Next Track"
+    
+    func perform() async throws -> some IntentResult {
+        SpotifyAPI.nextTrack()
+        return .result()
+    }
+}
