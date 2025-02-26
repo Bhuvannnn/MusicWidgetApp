@@ -71,6 +71,13 @@ struct ContentView: View {
             self.songTitle = songTitle
             self.artistName = artistName
             self.albumArtworkURL = albumArtworkURL
+            
+            // Store the fetched data in the shared container
+            let userDefaults = UserDefaults(suiteName: "group.com.yourname.MusicWidgetApp")!
+            userDefaults.set(songTitle, forKey: "songTitle")
+            userDefaults.set(artistName, forKey: "artistName")
+            userDefaults.set(albumArtworkURL?.absoluteString, forKey: "albumArtworkURL")
+            
             WidgetCenter.shared.reloadAllTimelines()
             print("Reloaded widget timelines")
         }

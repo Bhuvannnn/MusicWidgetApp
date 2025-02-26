@@ -13,36 +13,30 @@ struct MusicWidgetEntry: TimelineEntry {
 // Update the Provider to conform to TimelineProvider
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> MusicWidgetEntry {
-        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Song Title", artistName: "Artist", albumArtworkURL: nil)
+        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MusicWidgetEntry) -> Void) {
-        let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Song Title", artistName: "Artist", albumArtworkURL: nil)
+        let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil)
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MusicWidgetEntry>) -> Void) {
-        print("Widget timeline provider called")
-        SpotifyAPI.fetchNowPlaying { songTitle, artistName, albumArtworkURL, error in
-            if let error = error {
-                print("Widget Error fetching now playing data: \(error)")
-                let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Error", artistName: "Error", albumArtworkURL: nil)
-                let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30)))
-                completion(timeline)
-                return
-            }
-            
-            print("Widget successfully fetched data: \(songTitle ?? "nil") - \(artistName ?? "nil")")
-            let entry = MusicWidgetEntry(
-                date: Date(),
-                isPlaying: true,
-                songTitle: songTitle,
-                artistName: artistName,
-                albumArtworkURL: albumArtworkURL
-            )
-            let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30)))
-            completion(timeline)
-        }
+        let userDefaults = UserDefaults(suiteName: "group.com.yourname.MusicWidgetApp")!
+        let songTitle = userDefaults.string(forKey: "songTitle")
+        let artistName = userDefaults.string(forKey: "artistName")
+        let albumArtworkURLString = userDefaults.string(forKey: "albumArtworkURL")
+        let albumArtworkURL = albumArtworkURLString != nil ? URL(string: albumArtworkURLString!) : nil
+        
+        let entry = MusicWidgetEntry(
+            date: Date(),
+            isPlaying: songTitle != nil,
+            songTitle: songTitle ?? "Not Playing",
+            artistName: artistName ?? "Unknown Artist",
+            albumArtworkURL: albumArtworkURL
+        )
+        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30))) // Refresh every 30 seconds
+        completion(timeline)
     }
 }
 
