@@ -58,6 +58,8 @@ struct ContentView: View {
             if auth.isAuthenticated {
                 fetchNowPlaying()
                 startTimer()
+                WidgetCenter.shared.reloadAllTimelines()
+                print("Forced widget refresh after auth change")
             }
         }
     }
@@ -70,6 +72,7 @@ struct ContentView: View {
             self.artistName = artistName
             self.albumArtworkURL = albumArtworkURL
             WidgetCenter.shared.reloadAllTimelines()
+            print("Reloaded widget timelines")
         }
     }
 

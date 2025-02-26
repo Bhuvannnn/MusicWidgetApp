@@ -12,6 +12,7 @@ public class SpotifyAuth: ObservableObject {
     
     @Published public var accessToken: String? {
         didSet {
+            print("Access token updated: \(accessToken ?? "nil")")
             if let token = accessToken {
                 userDefaults.set(token, forKey: accessTokenKey)
             } else {
