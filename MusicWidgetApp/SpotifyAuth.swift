@@ -25,7 +25,7 @@ public class SpotifyAuth: ObservableObject {
     public static let clientID = "***REMOVED***"
     public static let clientSecret = "76b3e446df04464c9762dfceed93cbe8"
     public static let redirectURI = "musicwidget://callback"
-    public static let scope = "user-read-playback-state user-read-currently-playing"
+    public static let scope = "user-read-playback-state user-read-currently-playing user-modify-playback-state"
 
     private struct TokenResponse: Codable {
         let access_token: String

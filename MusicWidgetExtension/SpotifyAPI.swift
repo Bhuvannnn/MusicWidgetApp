@@ -245,7 +245,7 @@ public struct SpotifyAPI {
                     saveToFile(songData: songData)
                     
                     DispatchQueue.main.async {
-                        completion(songTitle, artistName, albumArtworkURL, nil)
+                completion(songTitle, artistName, albumArtworkURL, nil)
                     }
                 }
             } catch {
@@ -255,179 +255,375 @@ public struct SpotifyAPI {
         }.resume()
     }
     
-    // MARK: - Playback Controls
+    // MARK: - AppleScript Spotify Control
+    
+    private static func executeAppleScript(_ command: String) -> String? {
+        let script = NSAppleScript(source: "tell application \"Spotify\" to \(command)")
+        var error: NSDictionary?
+        let output = script?.executeAndReturnError(&error)
+        
+        if let error = error {
+            print("SpotifyAPI: AppleScript error: \(error)")
+            return nil
+        }
+        
+        return output?.stringValue
+    }
+    
+    // MARK: - Enhanced Playback Controls (Using AppleScript)
     
     public static func playPause() {
-        print("SpotifyAPI: Play/Pause button pressed")
+        print("SpotifyAPI: Play/Pause button pressed (using AppleScript)")
         
-        guard let token = userDefaults.string(forKey: accessTokenKey) else {
-            print("SpotifyAPI: Cannot play/pause - No access token found")
+        // First try the API method
+        if let token = userDefaults.string(forKey: accessTokenKey) {
+            // Try API first
+            executePlayPauseViaAPI(token: token)
+            
+            // But also use AppleScript as backup immediately after
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                executePlayPauseViaAppleScript()
+            }
+        } else {
+            // No token, use AppleScript directly
+            executePlayPauseViaAppleScript()
+        }
+    }
+    
+    private static func executePlayPauseViaAppleScript() {
+        // Check if Spotify is running first
+        let isSpotifyRunning = NSWorkspace.shared.runningApplications.contains { app in
+            return app.bundleIdentifier == "com.spotify.client"
+        }
+        
+        if !isSpotifyRunning {
+            print("SpotifyAPI: Spotify desktop app is not running")
             return
         }
         
-        // Load current state from file to avoid additional API calls
-        var isPlaying = true // Default to playing if we can't determine
-        
-        if let songData = loadFromFile(), let playing = songData["isPlaying"] as? Bool {
-            isPlaying = playing
-            print("SpotifyAPI: Current playback state: \(isPlaying ? "Playing" : "Paused")")
+        // Get current state to update our local cache
+        if let playerState = executeAppleScript("player state") {
+            let isPlaying = playerState == "playing"
+            print("SpotifyAPI: Current Spotify state via AppleScript: \(playerState)")
+            
+            // Update our cache with the toggled state
+            if var songData = loadFromFile() as? [String: Any] {
+                songData["isPlaying"] = !isPlaying
+                saveToFile(songData: songData)
+                print("SpotifyAPI: Updated local isPlaying state to: \(!isPlaying)")
+            }
         }
         
-        // Determine which endpoint to call based on current state
-        let endpoint = isPlaying ? "pause" : "play"
-        let actionURL = URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)")!
-        var request = URLRequest(url: actionURL)
-        request.httpMethod = "PUT"
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Execute the play/pause command
+        _ = executeAppleScript("playpause")
+        print("SpotifyAPI: Executed playpause via AppleScript")
         
-        print("SpotifyAPI: Sending \(endpoint) command to Spotify")
-        
-        // Optimistically update local state first for responsive UI
-        if var songData = loadFromFile() as? [String: Any] {
-            songData["isPlaying"] = !isPlaying
-            saveToFile(songData: songData)
-            print("SpotifyAPI: Updated local isPlaying state to: \(!isPlaying)")
-        }
-        
-        // Trigger widget refresh immediately for better responsiveness
+        // Force widget refresh
         DispatchQueue.main.async {
             WidgetCenter.shared.reloadAllTimelines()
         }
         
-        // Now make the actual API call
+        // Fetch the latest track info after the action
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            fetchNowPlaying { _, _, _, _ in
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+    }
+    
+    private static func executePlayPauseViaAPI(token: String) {
+        // Original API implementation
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player")!)
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
         URLSession.shared.dataTask(with: request) { data, response, error in
+            // Check for connection errors
             if let error = error {
-                print("SpotifyAPI: Error controlling playback: \(error.localizedDescription)")
-                
-                // Revert local state if API call failed
-                if var songData = loadFromFile() as? [String: Any] {
-                    songData["isPlaying"] = isPlaying // Revert to original state
-                    saveToFile(songData: songData)
-                    print("SpotifyAPI: Reverted isPlaying state due to API error")
-                }
-                
-                DispatchQueue.main.async {
-                    WidgetCenter.shared.reloadAllTimelines()
-                }
+                print("SpotifyAPI: Network error: \(error.localizedDescription)")
                 return
             }
             
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("SpotifyAPI: Play/Pause command response status: \(statusCode)")
-            
-            // Fetch latest track info after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                fetchNowPlaying { _, _, _, _ in 
-                    // Refresh widget after fetching the latest state
-                    WidgetCenter.shared.reloadAllTimelines()
+            // Check HTTP status code
+            if let httpResponse = response as? HTTPURLResponse {
+                print("SpotifyAPI: Response status code: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 204 {
+                    // 204 No Content means nothing is playing
+                    print("SpotifyAPI: No track currently playing")
+                    return
                 }
+                
+                if httpResponse.statusCode == 401 {
+                    // 401 Unauthorized means the token is expired
+                    print("SpotifyAPI: Token expired")
+                    return
+                }
+                
+                if httpResponse.statusCode != 200 {
+                    // Any other non-200 status is an error
+                    print("SpotifyAPI: Error status code: \(httpResponse.statusCode)")
+                    return
+                }
+            }
+            
+            // Check if we have data
+            guard let data = data, !data.isEmpty else {
+                print("SpotifyAPI: No data received")
+                return
+            }
+            
+            do {
+                if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
+                   let isPlaying = json["is_playing"] as? Bool {
+                    
+                    // If playing, send pause command; if paused, send play command
+                    let endpoint = isPlaying ? "pause" : "play"
+                    print("SpotifyAPI: Current state is \(isPlaying ? "playing" : "paused"), sending \(endpoint) command")
+                    
+                    // Create a new request for the play/pause action
+                    var actionRequest = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)")!)
+                    actionRequest.httpMethod = "PUT"
+                    actionRequest.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                    
+                    URLSession.shared.dataTask(with: actionRequest) { _, actionResponse, actionError in
+                        if let actionError = actionError {
+                            print("SpotifyAPI: Error sending \(endpoint) command: \(actionError.localizedDescription)")
+                            return
+                        }
+                        
+                        if let actionHttpResponse = actionResponse as? HTTPURLResponse {
+                            print("SpotifyAPI: \(endpoint) command response: \(actionHttpResponse.statusCode)")
+                            
+                            if actionHttpResponse.statusCode == 204 {
+                                // Success - update our stored state
+                                if var songData = loadFromFile() as? [String: Any] {
+                                    songData["isPlaying"] = !isPlaying
+                                    saveToFile(songData: songData)
+                                    print("SpotifyAPI: Updated isPlaying state to \(!isPlaying)")
+                                }
+                            } else {
+                                print("SpotifyAPI: Failed to \(endpoint) with status \(actionHttpResponse.statusCode)")
+                            }
+                        }
+                    }.resume()
+                }
+            } catch {
+                print("SpotifyAPI: JSON parsing error: \(error)")
             }
         }.resume()
     }
     
     public static func nextTrack() {
-        print("SpotifyAPI: Next track button pressed")
+        print("SpotifyAPI: Next track button pressed (using AppleScript)")
         
-        guard let token = userDefaults.string(forKey: accessTokenKey) else {
-            print("SpotifyAPI: Cannot skip track - No access token found")
+        // Try API method if token exists
+        if let token = userDefaults.string(forKey: accessTokenKey) {
+            // Existing API method first
+            executeNextTrackViaAPI(token: token)
+            
+            // But also use AppleScript as backup
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                executeNextTrackViaAppleScript()
+            }
+        } else {
+            // Fallback to AppleScript
+            executeNextTrackViaAppleScript()
+        }
+    }
+    
+    private static func executeNextTrackViaAppleScript() {
+        // Check if Spotify is running
+        let isSpotifyRunning = NSWorkspace.shared.runningApplications.contains { app in
+            return app.bundleIdentifier == "com.spotify.client"
+        }
+        
+        if !isSpotifyRunning {
+            print("SpotifyAPI: Spotify desktop app is not running")
             return
         }
         
-        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/next")!)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        print("SpotifyAPI: Sending next track command to Spotify")
-        
-        // Update local state to indicate loading/processing
+        // Update local state to indicate loading
         if var songData = loadFromFile() as? [String: Any] {
             songData["loading"] = true
             saveToFile(songData: songData)
         }
         
-        // Trigger immediate widget refresh for better UX
+        // Force widget refresh to show loading state
         DispatchQueue.main.async {
             WidgetCenter.shared.reloadAllTimelines()
         }
         
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("SpotifyAPI: Error skipping to next track: \(error.localizedDescription)")
-                
-                // Clear loading state
+        // Execute the next track command
+        _ = executeAppleScript("next track")
+        print("SpotifyAPI: Executed next track via AppleScript")
+        
+        // Fetch the latest track info after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            fetchNowPlaying { _, _, _, _ in
+                // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
                     songData["loading"] = nil
                     saveToFile(songData: songData)
                 }
                 
-                DispatchQueue.main.async {
-                    WidgetCenter.shared.reloadAllTimelines()
-                }
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+    }
+    
+    private static func executeNextTrackViaAPI(token: String) {
+        print("SpotifyAPI: Sending next track command via API")
+        
+        // Create a request for the next track action
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/next")!)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if let error = error {
+                print("SpotifyAPI: Error sending next track command: \(error.localizedDescription)")
                 return
             }
             
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("SpotifyAPI: Next track command response status: \(statusCode)")
-            
-            // Fetch the updated track info after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                fetchNowPlaying { _, _, _, _ in
-                    // Refresh widget after getting the new track info
-                    WidgetCenter.shared.reloadAllTimelines()
+            if let httpResponse = response as? HTTPURLResponse {
+                print("SpotifyAPI: Next track command response: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 204 {
+                    // Success - update our loading state
+                    if var songData = loadFromFile() as? [String: Any] {
+                        songData["loading"] = true
+                        saveToFile(songData: songData)
+                        print("SpotifyAPI: Set loading state for next track")
+                        
+                        // Force widget refresh with loading state
+                        DispatchQueue.main.async {
+                            WidgetCenter.shared.reloadAllTimelines()
+                        }
+                        
+                        // Wait a moment then fetch the updated track info
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            fetchNowPlaying { _, _, _, _ in
+                                // Clear loading state
+                                if var updatedSongData = loadFromFile() as? [String: Any] {
+                                    updatedSongData["loading"] = false
+                                    saveToFile(songData: updatedSongData)
+                                }
+                                
+                                // Refresh widget again with new track
+                                WidgetCenter.shared.reloadAllTimelines()
+                            }
+                        }
+                    }
+                } else {
+                    print("SpotifyAPI: Failed to send next track command with status \(httpResponse.statusCode)")
                 }
             }
         }.resume()
     }
     
     public static func previousTrack() {
-        print("SpotifyAPI: Previous track button pressed")
+        print("SpotifyAPI: Previous track button pressed (using AppleScript)")
         
-        guard let token = userDefaults.string(forKey: accessTokenKey) else {
-            print("SpotifyAPI: Cannot go to previous track - No access token found")
+        // Try API method if token exists
+        if let token = userDefaults.string(forKey: accessTokenKey) {
+            // Existing API method first
+            executePreviousTrackViaAPI(token: token)
+            
+            // But also use AppleScript as backup
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                executePreviousTrackViaAppleScript()
+            }
+        } else {
+            // Fallback to AppleScript
+            executePreviousTrackViaAppleScript()
+        }
+    }
+    
+    private static func executePreviousTrackViaAppleScript() {
+        // Check if Spotify is running
+        let isSpotifyRunning = NSWorkspace.shared.runningApplications.contains { app in
+            return app.bundleIdentifier == "com.spotify.client"
+        }
+        
+        if !isSpotifyRunning {
+            print("SpotifyAPI: Spotify desktop app is not running")
             return
         }
         
-        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/previous")!)
-        request.httpMethod = "POST"
-        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        print("SpotifyAPI: Sending previous track command to Spotify")
-        
-        // Update local state to indicate loading/processing
+        // Update local state to indicate loading
         if var songData = loadFromFile() as? [String: Any] {
             songData["loading"] = true
             saveToFile(songData: songData)
         }
         
-        // Trigger immediate widget refresh
+        // Force widget refresh to show loading state
         DispatchQueue.main.async {
             WidgetCenter.shared.reloadAllTimelines()
         }
         
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("SpotifyAPI: Error going to previous track: \(error.localizedDescription)")
-                
-                // Clear loading state
+        // Execute the previous track command
+        _ = executeAppleScript("previous track")
+        print("SpotifyAPI: Executed previous track via AppleScript")
+        
+        // Fetch the latest track info after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            fetchNowPlaying { _, _, _, _ in
+                // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
                     songData["loading"] = nil
                     saveToFile(songData: songData)
                 }
                 
-                DispatchQueue.main.async {
-                    WidgetCenter.shared.reloadAllTimelines()
-                }
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+    }
+    
+    private static func executePreviousTrackViaAPI(token: String) {
+        print("SpotifyAPI: Sending previous track command via API")
+        
+        // Create a request for the previous track action
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/previous")!)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        URLSession.shared.dataTask(with: request) { _, response, error in
+            if let error = error {
+                print("SpotifyAPI: Error sending previous track command: \(error.localizedDescription)")
                 return
             }
             
-            let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
-            print("SpotifyAPI: Previous track command response status: \(statusCode)")
-            
-            // Fetch the updated track info after a delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                fetchNowPlaying { _, _, _, _ in
-                    // Refresh widget after getting the new track info
-                    WidgetCenter.shared.reloadAllTimelines()
+            if let httpResponse = response as? HTTPURLResponse {
+                print("SpotifyAPI: Previous track command response: \(httpResponse.statusCode)")
+                
+                if httpResponse.statusCode == 204 {
+                    // Success - update our loading state
+                    if var songData = loadFromFile() as? [String: Any] {
+                        songData["loading"] = true
+                        saveToFile(songData: songData)
+                        print("SpotifyAPI: Set loading state for previous track")
+                        
+                        // Force widget refresh with loading state
+                        DispatchQueue.main.async {
+                            WidgetCenter.shared.reloadAllTimelines()
+                        }
+                        
+                        // Wait a moment then fetch the updated track info
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            fetchNowPlaying { _, _, _, _ in
+                                // Clear loading state
+                                if var updatedSongData = loadFromFile() as? [String: Any] {
+                                    updatedSongData["loading"] = false
+                                    saveToFile(songData: updatedSongData)
+                                }
+                                
+                                // Refresh widget again with new track
+                                WidgetCenter.shared.reloadAllTimelines()
+                            }
+                        }
+                    }
+                } else {
+                    print("SpotifyAPI: Failed to send previous track command with status \(httpResponse.statusCode)")
                 }
             }
         }.resume()
