@@ -1,5 +1,6 @@
 import WidgetKit
 import SwiftUI
+import AppIntents
 
 // Add the MusicWidgetEntry struct
 struct MusicWidgetEntry: TimelineEntry {
@@ -8,13 +9,22 @@ struct MusicWidgetEntry: TimelineEntry {
     let songTitle: String?
     let artistName: String?
     let albumArtworkURL: URL?
+    let localArtworkURL: URL?
     let debugMessage: String
 }
 
 // Update the Provider to conform to TimelineProvider
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> MusicWidgetEntry {
-        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil, debugMessage: "Placeholder")
+        MusicWidgetEntry(
+            date: Date(), 
+            isPlaying: false, 
+            songTitle: "Loading...", 
+            artistName: "Loading...", 
+            albumArtworkURL: nil,
+            localArtworkURL: nil, 
+            debugMessage: "Placeholder"
+        )
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MusicWidgetEntry) -> Void) {
@@ -34,6 +44,7 @@ struct Provider: TimelineProvider {
     
     private func loadCurrentData() -> MusicWidgetEntry {
         var debugMsg = "Checking for song data file..."
+        var localArtworkURL: URL? = nil
         
         // Try to load from file
         if let songData = SpotifyAPI.loadFromFile() {
@@ -42,6 +53,17 @@ struct Provider: TimelineProvider {
             let songTitle = songData["songTitle"] as? String
             let artistName = songData["artistName"] as? String
             let albumArtworkURLString = songData["albumArtworkURL"] as? String
+            let isPlaying = songData["isPlaying"] as? Bool ?? false
+            
+            // Try to get the local image path
+            if let localPath = songData["localImagePath"] as? String {
+                localArtworkURL = URL(fileURLWithPath: localPath)
+                debugMsg += " Found local image at: \(localPath)"
+            } else if let urlString = albumArtworkURLString, let cachedURL = SpotifyAPI.getCachedImageURL(for: urlString) {
+                localArtworkURL = cachedURL
+                debugMsg += " Found cached image"
+            }
+            
             let albumArtworkURL = albumArtworkURLString != nil ? URL(string: albumArtworkURLString!) : nil
             
             debugMsg += " Found data file with Title: \(songTitle ?? "nil"), Artist: \(artistName ?? "nil")"
@@ -49,10 +71,11 @@ struct Provider: TimelineProvider {
             
             return MusicWidgetEntry(
                 date: Date(),
-                isPlaying: songTitle != nil && !songTitle!.isEmpty,
+                isPlaying: isPlaying,
                 songTitle: songTitle,
                 artistName: artistName,
                 albumArtworkURL: albumArtworkURL,
+                localArtworkURL: localArtworkURL,
                 debugMessage: debugMsg
             )
         } else {
@@ -66,6 +89,7 @@ struct Provider: TimelineProvider {
                 songTitle: nil,
                 artistName: nil,
                 albumArtworkURL: nil,
+                localArtworkURL: nil,
                 debugMessage: debugMsg
             )
         }
@@ -74,6 +98,7 @@ struct Provider: TimelineProvider {
 
 struct MusicWidgetExtensionEntryView: View {
     var entry: Provider.Entry
+    @Environment(\.widgetFamily) private var widgetFamily
     
     var body: some View {
         VStack {
@@ -91,15 +116,30 @@ struct MusicWidgetExtensionEntryView: View {
                 }
             } else if let song = entry.songTitle, let artist = entry.artistName {
                 VStack {
-                    if let url = entry.albumArtworkURL {
+                    if let localURL = entry.localArtworkURL {
+                        // Use local image file
+                        if let uiImage = NSImage(contentsOf: localURL) {
+                            Image(nsImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: albumArtSize, height: albumArtSize)
+                                .cornerRadius(8)
+                        } else {
+                            albumArtPlaceholder
+                        }
+                    } else if let url = entry.albumArtworkURL {
+                        // Fall back to remote URL if needed
                         AsyncImage(url: url) { image in
                             image.resizable()
                         } placeholder: {
-                            Color.gray
+                            albumArtPlaceholder
                         }
-                        .frame(width: 50, height: 50)
+                        .frame(width: albumArtSize, height: albumArtSize)
                         .cornerRadius(8)
+                    } else {
+                        albumArtPlaceholder
                     }
+                    
                     Text(song)
                         .font(.headline)
                         .lineLimit(1)
@@ -107,17 +147,26 @@ struct MusicWidgetExtensionEntryView: View {
                         .font(.subheadline)
                         .lineLimit(1)
                     
-                    HStack {
+                    HStack(spacing: buttonSpacing) {
+                        Button(intent: PreviousTrackIntent()) {
+                            Image(systemName: "backward.fill")
+                                .frame(width: buttonSize, height: buttonSize)
+                        }
+                        .buttonStyle(.plain)
+                        
                         Button(intent: PlayPauseIntent()) {
                             Image(systemName: entry.isPlaying ? "pause.fill" : "play.fill")
+                                .frame(width: buttonSize, height: buttonSize)
                         }
                         .buttonStyle(.plain)
                         
                         Button(intent: NextTrackIntent()) {
                             Image(systemName: "forward.fill")
+                                .frame(width: buttonSize, height: buttonSize)
                         }
                         .buttonStyle(.plain)
                     }
+                    .padding(.top, 4)
                 }
             } else {
                 Text("Not Playing")
@@ -126,6 +175,45 @@ struct MusicWidgetExtensionEntryView: View {
         }
         .padding()
         .containerBackground(.fill.tertiary, for: .widget)
+    }
+    
+    // UI Constants
+    private var albumArtSize: CGFloat {
+        switch widgetFamily {
+        case .systemMedium:
+            return 80
+        default:
+            return 50
+        }
+    }
+    
+    private var buttonSize: CGFloat {
+        switch widgetFamily {
+        case .systemMedium:
+            return 22
+        default:
+            return 18
+        }
+    }
+    
+    private var buttonSpacing: CGFloat {
+        switch widgetFamily {
+        case .systemMedium:
+            return 20
+        default:
+            return 10
+        }
+    }
+    
+    private var albumArtPlaceholder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.gray.opacity(0.3))
+            Image(systemName: "music.note")
+                .font(.system(size: albumArtSize * 0.4))
+                .foregroundColor(.gray)
+        }
+        .frame(width: albumArtSize, height: albumArtSize)
     }
 }
 

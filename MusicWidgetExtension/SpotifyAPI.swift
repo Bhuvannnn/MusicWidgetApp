@@ -17,9 +17,19 @@ public struct SpotifyAPI {
             try? FileManager.default.createDirectory(at: containerURL, withIntermediateDirectories: true)
         }
         
+        // Create images directory
+        let imagesURL = containerURL.appendingPathComponent("Images", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: imagesURL.path) {
+            try? FileManager.default.createDirectory(at: imagesURL, withIntermediateDirectories: true)
+        }
+        
         print("Container URL: \(containerURL)")
         return containerURL
     }()
+    
+    static var imagesDirectoryURL: URL {
+        return containerURL.appendingPathComponent("Images", isDirectory: true)
+    }
     
     static func saveToFile(songData: [String: Any]) {
         let songDataURL = containerURL.appendingPathComponent("songData.json")
@@ -50,6 +60,81 @@ public struct SpotifyAPI {
             print("Error loading song data from file: \(error)")
             return nil
         }
+    }
+    
+    // MARK: - Image Caching
+    
+    static func cacheImageFromURL(_ urlString: String, completion: @escaping (URL?) -> Void) {
+        guard let url = URL(string: urlString) else {
+            print("Invalid image URL")
+            completion(nil)
+            return
+        }
+        
+        // Create a unique filename based on the URL
+        let filename = urlString.hash.description + ".jpg"
+        let fileURL = imagesDirectoryURL.appendingPathComponent(filename)
+        
+        // Check if file already exists (cached)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            print("Image already cached at: \(fileURL.path)")
+            completion(fileURL)
+            return
+        }
+        
+        // Download the image
+        URLSession.shared.dataTask(with: url) { data, response, error in
+            guard let data = data, error == nil else {
+                print("Error downloading image: \(error?.localizedDescription ?? "Unknown error")")
+                completion(nil)
+                return
+            }
+            
+            do {
+                // Save the image data to file
+                try data.write(to: fileURL)
+                print("Image cached successfully at: \(fileURL.path)")
+                completion(fileURL)
+            } catch {
+                print("Error saving image: \(error.localizedDescription)")
+                completion(nil)
+            }
+        }.resume()
+    }
+    
+    static func getCachedImageURL(for imageURLString: String) -> URL? {
+        let filename = imageURLString.hash.description + ".jpg"
+        let fileURL = imagesDirectoryURL.appendingPathComponent(filename)
+        
+        return FileManager.default.fileExists(atPath: fileURL.path) ? fileURL : nil
+    }
+    
+    static func loadCachedImage(for imageURLString: String) -> NSImage? {
+        guard let fileURL = getCachedImageURL(for: imageURLString) else {
+            return nil
+        }
+        
+        do {
+            let data = try Data(contentsOf: fileURL)
+            return NSImage(data: data)
+        } catch {
+            print("Error loading cached image: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    // MARK: - Widget UI Helper
+    
+    static func getWidgetImage(from imageURLString: String?) -> NSImage? {
+        guard let urlString = imageURLString else { return nil }
+        
+        // Try to load from cache first
+        if let cachedImage = loadCachedImage(for: urlString) {
+            return cachedImage
+        }
+        
+        // If not in cache, return nil (widget will have to wait for app to cache it)
+        return nil
     }
     
     // MARK: - Spotify API calls
@@ -128,18 +213,39 @@ public struct SpotifyAPI {
                 
                 print("SpotifyAPI: Successfully parsed track - \(songTitle ?? "Unknown") by \(artistName ?? "Unknown")")
                 
-                // Store the data in a file instead of UserDefaults
-                let songData: [String: Any] = [
-                    "songTitle": songTitle as Any,
-                    "artistName": artistName as Any,
-                    "albumArtworkURL": imageUrlString as Any,
-                    "timestamp": Date().timeIntervalSince1970
-                ]
-                
-                saveToFile(songData: songData)
-                
-                DispatchQueue.main.async {
-                    completion(songTitle, artistName, albumArtworkURL, nil)
+                // Cache the album artwork image if available
+                if let imageURLString = imageUrlString {
+                    cacheImageFromURL(imageURLString) { cachedURL in
+                        let songData: [String: Any] = [
+                            "songTitle": songTitle as Any,
+                            "artistName": artistName as Any,
+                            "albumArtworkURL": imageURLString as Any,
+                            "localImagePath": cachedURL?.path as Any,
+                            "timestamp": Date().timeIntervalSince1970,
+                            "isPlaying": json?["is_playing"] as? Bool ?? true
+                        ]
+                        
+                        saveToFile(songData: songData)
+                        
+                        DispatchQueue.main.async {
+                            completion(songTitle, artistName, albumArtworkURL, nil)
+                        }
+                    }
+                } else {
+                    // No image available, save the rest of the data
+                    let songData: [String: Any] = [
+                        "songTitle": songTitle as Any,
+                        "artistName": artistName as Any,
+                        "albumArtworkURL": NSNull(),
+                        "timestamp": Date().timeIntervalSince1970,
+                        "isPlaying": json?["is_playing"] as? Bool ?? true
+                    ]
+                    
+                    saveToFile(songData: songData)
+                    
+                    DispatchQueue.main.async {
+                        completion(songTitle, artistName, albumArtworkURL, nil)
+                    }
                 }
             } catch {
                 print("SpotifyAPI: JSON parsing error: \(error)")
@@ -151,29 +257,38 @@ public struct SpotifyAPI {
     public static func playPause() {
         guard let token = userDefaults.string(forKey: accessTokenKey) else { return }
         
-        // First check player state
-        let stateURL = URL(string: "https://api.spotify.com/v1/me/player")!
-        var stateRequest = URLRequest(url: stateURL)
-        stateRequest.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Load current state from file to avoid additional API calls
+        var isPlaying = true // Default to playing if we can't determine
         
-        URLSession.shared.dataTask(with: stateRequest) { data, response, error in
-            guard let data = data, error == nil else { return }
+        if let songData = loadFromFile(), let playing = songData["isPlaying"] as? Bool {
+            isPlaying = playing
+        }
+        
+        // Determine which endpoint to call based on current state
+        let endpoint = isPlaying ? "pause" : "play"
+        let actionURL = URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)")!
+        var request = URLRequest(url: actionURL)
+        request.httpMethod = "PUT"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("SpotifyAPI: Sending \(endpoint) command to Spotify")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error controlling playback: \(error.localizedDescription)")
+                return
+            }
             
-            do {
-                if let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
-                   let isPlaying = json["is_playing"] as? Bool {
-                    
-                    // Determine which endpoint to call based on current state
-                    let endpoint = isPlaying ? "pause" : "play"
-                    let actionURL = URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)")!
-                    var request = URLRequest(url: actionURL)
-                    request.httpMethod = "PUT"
-                    request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-                    
-                    URLSession.shared.dataTask(with: request).resume()
-                }
-            } catch {
-                print("Error checking play state: \(error)")
+            // Update local state
+            if let songData = loadFromFile(), var updatedData = songData as? [String: Any] {
+                updatedData["isPlaying"] = !isPlaying
+                saveToFile(songData: updatedData)
+                print("Updated isPlaying state to: \(!isPlaying)")
+            }
+            
+            // Fetch latest track info after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                fetchNowPlaying { _, _, _, _ in }
             }
         }.resume()
     }
@@ -185,6 +300,40 @@ public struct SpotifyAPI {
         request.httpMethod = "POST"
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        URLSession.shared.dataTask(with: request).resume()
+        print("SpotifyAPI: Sending next track command to Spotify")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error skipping to next track: \(error.localizedDescription)")
+                return
+            }
+            
+            // Fetch the updated track info after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                fetchNowPlaying { _, _, _, _ in }
+            }
+        }.resume()
+    }
+    
+    public static func previousTrack() {
+        guard let token = userDefaults.string(forKey: accessTokenKey) else { return }
+        
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/previous")!)
+        request.httpMethod = "POST"
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        print("SpotifyAPI: Sending previous track command to Spotify")
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Error going to previous track: \(error.localizedDescription)")
+                return
+            }
+            
+            // Fetch the updated track info after a short delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                fetchNowPlaying { _, _, _, _ in }
+            }
+        }.resume()
     }
 }
