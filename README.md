@@ -99,6 +99,92 @@ The app consists of two main components:
 - **Main App**: Handles authentication and serves as a configuration panel
 - **Widget Extension**: Displays track information and handles playback controls
 
+### Architecture Diagram
+
+┌─────────────────────────────────────────────────────────────────┐
+│                          macOS SYSTEM                           │
+│                                                                 │
+│  ┌─────────────────┐            ┌─────────────────────────┐     │
+│  │                 │            │                         │     │
+│  │    MAIN APP     │◄───────────┤   WIDGET EXTENSION      │     │
+│  │  (Cocoa + SwiftUI)           │   (WidgetKit + SwiftUI) │     │
+│  │                 │            │                         │     │
+│  └────────┬────────┘            └────────────┬────────────┘     │
+│           │                                  │                  │
+│           │                                  │                  │
+│           ▼                                  ▼                  │
+│  ┌─────────────────┐            ┌─────────────────────────┐     │
+│  │                 │            │                         │     │
+│  │  AUTHENTICATION │            │   PLAYBACK CONTROL      │     │
+│  │    MANAGER      │            │       ENGINE            │     │
+│  │                 │            │                         │     │
+│  └────────┬────────┘            └────────────┬────────────┘     │
+│           │                                  │                  │
+└───────────┼──────────────────────────────────┼──────────────────┘
+            │                                  │                  
+            ▼                                  ▼                  
+┌─────────────────────┐              ┌──────────────────────────┐
+│                     │              │                          │
+│   SPOTIFY WEB API   │◄─────────────┤   LOCAL SPOTIFY APP      │
+│                     │              │   (AppleScript Bridge)   │
+│                     │              │                          │
+└─────────────────────┘              └──────────────────────────┘
+        ▲                                       ▲
+        │                                       │
+        │            ┌──────────────┐           │
+        │            │              │           │
+        └────────────┤  LOCAL CACHE ├───────────┘
+                     │              │
+                     └──────────────┘
+
+### Architecture Key Components
+
+1. **Main App**: Handles authentication, serves as a configuration panel and provides initial background refresh
+2. **Widget Extension**: Displays track information and handles playback controls
+3. **Authentication Manager**: Manages OAuth tokens, handles token refresh and stores credentials securely
+4. **Playback Control Engine**: Implements dual-control strategy (API + AppleScript), handles state synchronization and fallback logic
+5. **Local Cache**: Stores album artwork, caches playback state and shares data between app and widget
+6. **Spotify Web API**: Provides cloud-based playback control
+7. **Local Spotify App**: Provides local playback control
+
+### Data Flow Diagram
+[USER] <---------> [WIDGET EXTENSION] <-----------> [SPOTIFY DESKTOP APP]
+   ^                     ^      |                         ^
+   |                     |      |                         |
+   v                     v      v                         v
+[MAIN APP] <---------> [LOCAL STORAGE] <-------> [SPOTIFY WEB API]
+
+### Data Flow Key Components
+
+1. User -> Widget Extension:
+   - User clicks play/pause, next track, previous track
+   - Widget Extension updates playback state via API or AppleScript
+   - Widget Extension requests current track info from API
+   - Widget Extension displays track info and artwork
+
+2. Widget Extension -> Main App:
+   - Widget Extension requests current track info from API
+   - Main App updates local cache
+   - Main App refreshes widget
+
+3. Main App -> Local Storage:
+   - Main App writes authentication tokens and playback state to local storage
+   - Main App initiates background refresh
+
+4. Local Storage -> Spotify Web API:
+   - Local storage requests current track info from API
+   - Spotify Web API returns track info
+
+5. Spotify Web API -> Widget Extension:
+   - Spotify Web API returns track info
+
+6. Spotify Web API -> Local Spotify App:
+   - Spotify Web API sends playback commands to local app
+
+7. Local Spotify App -> Widget Extension:
+   - Local app sends current track info to widget
+
+
 ### Control Methods
 
 The app uses a hybrid approach for reliability:
