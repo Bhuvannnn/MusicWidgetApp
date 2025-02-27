@@ -10,6 +10,7 @@ struct MusicWidgetEntry: TimelineEntry {
     let artistName: String?
     let albumArtworkURL: URL?
     let localArtworkURL: URL?
+    let isLoading: Bool
     let debugMessage: String
 }
 
@@ -23,6 +24,7 @@ struct Provider: TimelineProvider {
             artistName: "Loading...", 
             albumArtworkURL: nil,
             localArtworkURL: nil, 
+            isLoading: false,
             debugMessage: "Placeholder"
         )
     }
@@ -45,6 +47,7 @@ struct Provider: TimelineProvider {
     private func loadCurrentData() -> MusicWidgetEntry {
         var debugMsg = "Checking for song data file..."
         var localArtworkURL: URL? = nil
+        var isLoading = false
         
         // Try to load from file
         if let songData = SpotifyAPI.loadFromFile() {
@@ -54,6 +57,9 @@ struct Provider: TimelineProvider {
             let artistName = songData["artistName"] as? String
             let albumArtworkURLString = songData["albumArtworkURL"] as? String
             let isPlaying = songData["isPlaying"] as? Bool ?? false
+            
+            // Check if we're in a loading state (track changing)
+            isLoading = songData["loading"] as? Bool ?? false
             
             // Try to get the local image path
             if let localPath = songData["localImagePath"] as? String {
@@ -76,6 +82,7 @@ struct Provider: TimelineProvider {
                 artistName: artistName,
                 albumArtworkURL: albumArtworkURL,
                 localArtworkURL: localArtworkURL,
+                isLoading: isLoading,
                 debugMessage: debugMsg
             )
         } else {
@@ -90,6 +97,7 @@ struct Provider: TimelineProvider {
                 artistName: nil,
                 albumArtworkURL: nil,
                 localArtworkURL: nil,
+                isLoading: false,
                 debugMessage: debugMsg
             )
         }
@@ -124,6 +132,11 @@ struct MusicWidgetExtensionEntryView: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: albumArtSize, height: albumArtSize)
                                 .cornerRadius(8)
+                                .overlay(
+                                    entry.isLoading ? 
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color.black.opacity(0.3)) : nil
+                                )
                         } else {
                             albumArtPlaceholder
                         }
@@ -136,37 +149,65 @@ struct MusicWidgetExtensionEntryView: View {
                         }
                         .frame(width: albumArtSize, height: albumArtSize)
                         .cornerRadius(8)
+                        .overlay(
+                            entry.isLoading ? 
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.black.opacity(0.3)) : nil
+                        )
                     } else {
                         albumArtPlaceholder
                     }
                     
-                    Text(song)
-                        .font(.headline)
-                        .lineLimit(1)
-                    Text(artist)
-                        .font(.subheadline)
-                        .lineLimit(1)
+                    if entry.isLoading {
+                        Text("Changing track...")
+                            .font(.headline)
+                            .lineLimit(1)
+                    } else {
+                        Text(song)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text(artist)
+                            .font(.subheadline)
+                            .lineLimit(1)
+                    }
                     
                     HStack(spacing: buttonSpacing) {
-                        Button(intent: PreviousTrackIntent()) {
+                        Link(destination: URL(string: "musicwidget://previous")!) {
                             Image(systemName: "backward.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(width: buttonSize, height: buttonSize)
+                                .padding(8)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(buttonSize/2)
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
                         
-                        Button(intent: PlayPauseIntent()) {
+                        Link(destination: URL(string: "musicwidget://playpause")!) {
                             Image(systemName: entry.isPlaying ? "pause.fill" : "play.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(width: buttonSize, height: buttonSize)
+                                .padding(8)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(buttonSize/2)
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
                         
-                        Button(intent: NextTrackIntent()) {
+                        Link(destination: URL(string: "musicwidget://next")!) {
                             Image(systemName: "forward.fill")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
                                 .frame(width: buttonSize, height: buttonSize)
+                                .padding(8)
+                                .background(Color.secondary.opacity(0.2))
+                                .cornerRadius(buttonSize/2)
+                                .foregroundColor(.primary)
                         }
-                        .buttonStyle(.plain)
                     }
                     .padding(.top, 4)
+                    .opacity(entry.isLoading ? 0.6 : 1.0)
+                    .animation(.easeInOut(duration: 0.2), value: entry.isLoading)
                 }
             } else {
                 Text("Not Playing")
@@ -214,6 +255,11 @@ struct MusicWidgetExtensionEntryView: View {
                 .foregroundColor(.gray)
         }
         .frame(width: albumArtSize, height: albumArtSize)
+        .overlay(
+            entry.isLoading ? 
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.black.opacity(0.3)) : nil
+        )
     }
 }
 
@@ -232,5 +278,6 @@ struct MusicWidgetExtension: Widget {
         .configurationDisplayName("Music Widget")
         .description("Displays current Spotify playback")
         .supportedFamilies([.systemSmall, .systemMedium])
+        .contentMarginsDisabled()
     }
 }

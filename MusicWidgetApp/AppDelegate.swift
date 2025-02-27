@@ -21,6 +21,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window?.setFrameAutosaveName("Main Window")
         window?.contentView = NSHostingView(rootView: contentView)
         window?.makeKeyAndOrderFront(nil)
+        
+        // Register for custom URL scheme events
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
     }
     
     func applicationWillTerminate(_ notification: Notification) {
@@ -31,10 +39,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let url = urls.first else { return }
         
         if url.scheme == "musicwidget" {
-            SpotifyAuth.shared.handleRedirect(url: url)
-            // Update the main window content
-            DispatchQueue.main.async {
-                self.window?.contentView = NSHostingView(rootView: ContentView())
+            if url.host == "playpause" {
+                SpotifyAPI.playPause()
+            } else if url.host == "next" {
+                SpotifyAPI.nextTrack()
+            } else if url.host == "previous" {
+                SpotifyAPI.previousTrack()
+            } else if url.host == "nowplaying" {
+                SpotifyAuth.shared.handleRedirect(url: url)
+                // Update the main window content
+                DispatchQueue.main.async {
+                    self.window?.contentView = NSHostingView(rootView: ContentView())
+                }
+            }
+        }
+    }
+    
+    @objc func handleURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+              let url = URL(string: urlString) else {
+            return
+        }
+        
+        print("Handling URL: \(url.absoluteString)")
+        
+        if url.scheme == "musicwidget" {
+            switch url.host {
+            case "playpause":
+                SpotifyAPI.playPause()
+            case "next":
+                SpotifyAPI.nextTrack()
+            case "previous":
+                SpotifyAPI.previousTrack()
+            default:
+                SpotifyAuth.shared.handleRedirect(url: url)
+                // Update the main window content
+                DispatchQueue.main.async {
+                    self.window?.contentView = NSHostingView(rootView: ContentView())
+                }
             }
         }
     }
