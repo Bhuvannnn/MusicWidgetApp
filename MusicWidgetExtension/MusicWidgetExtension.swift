@@ -8,37 +8,67 @@ struct MusicWidgetEntry: TimelineEntry {
     let songTitle: String?
     let artistName: String?
     let albumArtworkURL: URL?
+    let debugMessage: String
 }
 
 // Update the Provider to conform to TimelineProvider
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> MusicWidgetEntry {
-        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil)
+        MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil, debugMessage: "Placeholder")
     }
 
     func getSnapshot(in context: Context, completion: @escaping (MusicWidgetEntry) -> Void) {
-        let entry = MusicWidgetEntry(date: Date(), isPlaying: false, songTitle: "Loading...", artistName: "Loading...", albumArtworkURL: nil)
+        let entry = loadCurrentData()
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<MusicWidgetEntry>) -> Void) {
-        let userDefaults = UserDefaults(suiteName: "group.com.yourname.MusicWidgetApp")!
-        let songTitle = userDefaults.string(forKey: "songTitle")
-        let artistName = userDefaults.string(forKey: "artistName")
-        let albumArtworkURLString = userDefaults.string(forKey: "albumArtworkURL")
-        let albumArtworkURL = albumArtworkURLString != nil ? URL(string: albumArtworkURLString!) : nil
+        let entry = loadCurrentData()
         
-        debugPrint("Widget timeline - Retrieved data: Title=\(songTitle ?? "nil"), Artist=\(artistName ?? "nil")")
-
-        let entry = MusicWidgetEntry(
-            date: Date(),
-            isPlaying: songTitle != nil,
-            songTitle: songTitle ?? "Not Playing",
-            artistName: artistName ?? "Unknown Artist",
-            albumArtworkURL: albumArtworkURL
-        )
-        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(5))) // Refresh every 30 seconds
+        // Refresh more frequently for better responsiveness
+        let refreshDate = Date().addingTimeInterval(5)
+        let timeline = Timeline(entries: [entry], policy: .after(refreshDate))
+        print("Widget: Creating new timeline with entry: \(String(describing: entry.songTitle))")
         completion(timeline)
+    }
+    
+    private func loadCurrentData() -> MusicWidgetEntry {
+        var debugMsg = "Checking for song data file..."
+        
+        // Try to load from file
+        if let songData = SpotifyAPI.loadFromFile() {
+            print("Widget: Successfully loaded song data from file")
+            
+            let songTitle = songData["songTitle"] as? String
+            let artistName = songData["artistName"] as? String
+            let albumArtworkURLString = songData["albumArtworkURL"] as? String
+            let albumArtworkURL = albumArtworkURLString != nil ? URL(string: albumArtworkURLString!) : nil
+            
+            debugMsg += " Found data file with Title: \(songTitle ?? "nil"), Artist: \(artistName ?? "nil")"
+            print("Widget data load - \(debugMsg)")
+            
+            return MusicWidgetEntry(
+                date: Date(),
+                isPlaying: songTitle != nil && !songTitle!.isEmpty,
+                songTitle: songTitle,
+                artistName: artistName,
+                albumArtworkURL: albumArtworkURL,
+                debugMessage: debugMsg
+            )
+        } else {
+            // No data file found
+            debugMsg += " No data file found."
+            print("Widget data load - \(debugMsg)")
+            
+            return MusicWidgetEntry(
+                date: Date(),
+                isPlaying: false,
+                songTitle: nil,
+                artistName: nil,
+                albumArtworkURL: nil,
+                debugMessage: debugMsg
+            )
+        }
     }
 }
 
@@ -46,20 +76,18 @@ struct MusicWidgetExtensionEntryView: View {
     var entry: Provider.Entry
     
     var body: some View {
-        // Debug information as part of the view
         VStack {
             if entry.songTitle == nil || entry.artistName == nil {
                 VStack {
-                    Text("Debug Info")
-                        .font(.caption)
-                    Text("Title: \(entry.songTitle ?? "nil")")
-                        .font(.caption2)
-                    Text("Artist: \(entry.artistName ?? "nil")")
-                        .font(.caption2)
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                    Text("Loading...")
+                    Text("No Current Song")
                         .font(.headline)
+                    Text("Open the Spotify app and play music")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("Debug: \(entry.debugMessage)")
+                        .font(.system(size: 8))
+                        .foregroundColor(.gray)
+                        .padding(.top, 2)
                 }
             } else if let song = entry.songTitle, let artist = entry.artistName {
                 VStack {
@@ -74,8 +102,10 @@ struct MusicWidgetExtensionEntryView: View {
                     }
                     Text(song)
                         .font(.headline)
+                        .lineLimit(1)
                     Text(artist)
                         .font(.subheadline)
+                        .lineLimit(1)
                     
                     HStack {
                         Button(intent: PlayPauseIntent()) {
@@ -108,11 +138,11 @@ struct MusicWidgetExtension: Widget {
             provider: Provider(),
             content: { entry in
                 MusicWidgetExtensionEntryView(entry: entry)
-                    .widgetURL(URL(string: "musicwidget://nowplaying")) // Add deep linking
+                    .widgetURL(URL(string: "musicwidget://nowplaying"))
             }
         )
         .configurationDisplayName("Music Widget")
         .description("Displays current Spotify playback")
-        .supportedFamilies([.systemSmall, .systemMedium]) // Add more sizes for testing
+        .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
