@@ -22,7 +22,7 @@ public class SpotifyAuth: ObservableObject {
     }
     @Published public var isAuthenticated: Bool = false
     
-    public static let clientID = "***REMOVED***"
+    public static let clientID = "6231f468bfa24dd4a9fd1d6cbac4d6d1"
     public static let clientSecret = "76b3e446df04464c9762dfceed93cbe8"
     public static let redirectURI = "musicwidget://callback"
     public static let scope = "user-read-playback-state user-read-currently-playing user-modify-playback-state"

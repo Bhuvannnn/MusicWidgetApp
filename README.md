@@ -102,6 +102,7 @@ The app consists of two main components:
 ### Architecture Diagram
 
 ![Architecture Diagram](Screenshot/Architecture_Diagram.png)
+
 ### Architecture Key Components
 
 1. **Main App**: Handles authentication, serves as a configuration panel and provides initial background refresh
@@ -113,7 +114,7 @@ The app consists of two main components:
 7. **Local Spotify App**: Provides local playback control
 
 ### Data Flow Diagram
-![Data Flow Diagram](Screenshot/Data_Flow_Diagram.png)
+![Data Flow Diagram](Screenshot/DataFlowDiagram.png)
 
 ### Data Flow Key Components
 
