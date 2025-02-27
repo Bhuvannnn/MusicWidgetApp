@@ -77,7 +77,11 @@ struct ContentView: View {
             userDefaults.set(songTitle, forKey: "songTitle")
             userDefaults.set(artistName, forKey: "artistName")
             userDefaults.set(albumArtworkURL?.absoluteString, forKey: "albumArtworkURL")
-            
+            // Verify data was stored
+            let storedTitle = userDefaults.string(forKey: "songTitle")
+            let storedArtist = userDefaults.string(forKey: "artistName")
+            print("Stored data verification - Title: \(storedTitle ?? "nil"), Artist: \(storedArtist ?? "nil")")
+
             WidgetCenter.shared.reloadAllTimelines()
             print("Reloaded widget timelines")
         }
