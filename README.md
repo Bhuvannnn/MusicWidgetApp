@@ -101,42 +101,7 @@ The app consists of two main components:
 
 ### Architecture Diagram
 
-┌─────────────────────────────────────────────────────────────────┐
-│                          macOS SYSTEM                           │
-│                                                                 │
-│  ┌─────────────────┐            ┌─────────────────────────┐     │
-│  │                 │            │                         │     │
-│  │    MAIN APP     │◄───────────┤   WIDGET EXTENSION      │     │
-│  │  (Cocoa + SwiftUI)           │   (WidgetKit + SwiftUI) │     │
-│  │                 │            │                         │     │
-│  └────────┬────────┘            └────────────┬────────────┘     │
-│           │                                  │                  │
-│           │                                  │                  │
-│           ▼                                  ▼                  │
-│  ┌─────────────────┐            ┌─────────────────────────┐     │
-│  │                 │            │                         │     │
-│  │  AUTHENTICATION │            │   PLAYBACK CONTROL      │     │
-│  │    MANAGER      │            │       ENGINE            │     │
-│  │                 │            │                         │     │
-│  └────────┬────────┘            └────────────┬────────────┘     │
-│           │                                  │                  │
-└───────────┼──────────────────────────────────┼──────────────────┘
-            │                                  │                  
-            ▼                                  ▼                  
-┌─────────────────────┐              ┌──────────────────────────┐
-│                     │              │                          │
-│   SPOTIFY WEB API   │◄─────────────┤   LOCAL SPOTIFY APP      │
-│                     │              │   (AppleScript Bridge)   │
-│                     │              │                          │
-└─────────────────────┘              └──────────────────────────┘
-        ▲                                       ▲
-        │                                       │
-        │            ┌──────────────┐           │
-        │            │              │           │
-        └────────────┤  LOCAL CACHE ├───────────┘
-                     │              │
-                     └──────────────┘
-
+![Architecture Diagram](Screenshot/Architecture_Diagram.png)
 ### Architecture Key Components
 
 1. **Main App**: Handles authentication, serves as a configuration panel and provides initial background refresh
@@ -148,11 +113,7 @@ The app consists of two main components:
 7. **Local Spotify App**: Provides local playback control
 
 ### Data Flow Diagram
-[USER] <---------> [WIDGET EXTENSION] <-----------> [SPOTIFY DESKTOP APP]
-   ^                     ^      |                         ^
-   |                     |      |                         |
-   v                     v      v                         v
-[MAIN APP] <---------> [LOCAL STORAGE] <-------> [SPOTIFY WEB API]
+![Data Flow Diagram](Screenshot/Data_Flow_Diagram.png)
 
 ### Data Flow Key Components
 
