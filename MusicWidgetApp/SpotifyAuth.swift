@@ -22,11 +22,6 @@ public class SpotifyAuth: ObservableObject {
     }
     @Published public var isAuthenticated: Bool = false
     
-    public static let clientID = "6231f468bfa24dd4a9fd1d6cbac4d6d1"
-    public static let clientSecret = "76b3e446df04464c9762dfceed93cbe8"
-    public static let redirectURI = "musicwidget://callback"
-    public static let scope = "user-read-playback-state user-read-currently-playing user-modify-playback-state"
-
     private struct TokenResponse: Codable {
         let access_token: String
         let token_type: String
@@ -42,7 +37,7 @@ public class SpotifyAuth: ObservableObject {
     }
     
     public func authorizeSpotify() {
-        let authURLString = "https://accounts.spotify.com/authorize?client_id=\(Self.clientID)&response_type=code&redirect_uri=\(Self.redirectURI)&scope=\(Self.scope)&show_dialog=true"
+        let authURLString = "https://accounts.spotify.com/authorize?client_id=\(SpotifyConfig.clientID)&response_type=code&redirect_uri=\(SpotifyConfig.redirectURI)&scope=\(SpotifyConfig.scope)&show_dialog=true"
         
         if let encodedAuthURLString = authURLString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
            let authURL = URL(string: encodedAuthURLString) {
@@ -62,8 +57,8 @@ public func handleRedirect(url: URL) {
     var request = URLRequest(url: tokenURL)
     request.httpMethod = "POST"
     
-    let body = "grant_type=authorization_code&code=\(code)&redirect_uri=\(Self.redirectURI)"
-    let authData = "\(Self.clientID):\(Self.clientSecret)".data(using: .utf8)!.base64EncodedString()
+    let body = "grant_type=authorization_code&code=\(code)&redirect_uri=\(SpotifyConfig.redirectURI)"
+    let authData = "\(SpotifyConfig.clientID):\(SpotifyConfig.clientSecret)".data(using: .utf8)!.base64EncodedString()
     
     request.httpBody = body.data(using: .utf8)
     request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
