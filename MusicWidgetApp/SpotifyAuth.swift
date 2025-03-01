@@ -3,6 +3,13 @@ import SwiftUI
 import AppKit
 import Combine
 
+// Create a namespace for Spotify-related notifications
+public extension Notification.Name {
+    static var spotifyAuthStatusChanged: Notification.Name {
+        return Notification.Name("com.yourname.MusicWidgetApp.spotifyAuthStatusChanged")
+    }
+}
+
 public class SpotifyAuth: ObservableObject {
     public static let shared = SpotifyAuth()
     private var cancellables = Set<AnyCancellable>()
@@ -39,7 +46,7 @@ public class SpotifyAuth: ObservableObject {
     public func authorizeSpotify() {
         let authURLString = "https://accounts.spotify.com/authorize?client_id=\(SpotifyConfig.clientID)&response_type=code&redirect_uri=\(SpotifyConfig.redirectURI)&scope=\(SpotifyConfig.scope)&show_dialog=true"
         
-        if let encodedAuthURLString = authURLString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+        if let encodedAuthURLString = authURLString.addingPercentEncoding(withAllowedCharacters: CharacterSet.urlQueryAllowed),
            let authURL = URL(string: encodedAuthURLString) {
             NSWorkspace.shared.open(authURL)
         }
@@ -58,9 +65,9 @@ public func handleRedirect(url: URL) {
     request.httpMethod = "POST"
     
     let body = "grant_type=authorization_code&code=\(code)&redirect_uri=\(SpotifyConfig.redirectURI)"
-    let authData = "\(SpotifyConfig.clientID):\(SpotifyConfig.clientSecret)".data(using: .utf8)!.base64EncodedString()
+    let authData = "\(SpotifyConfig.clientID):\(SpotifyConfig.clientSecret)".data(using: String.Encoding.utf8)!.base64EncodedString()
     
-    request.httpBody = body.data(using: .utf8)
+    request.httpBody = body.data(using: String.Encoding.utf8)
     request.addValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
     request.addValue("Basic \(authData)", forHTTPHeaderField: "Authorization")
     
@@ -82,11 +89,11 @@ public func handleRedirect(url: URL) {
             DispatchQueue.main.async {
                 self.accessToken = tokenResponse.access_token
                 self.isAuthenticated = true
-                NotificationCenter.default.post(name: .spotifyAuthChanged, object: nil)
+                NotificationCenter.default.post(name: .spotifyAuthStatusChanged, object: nil)
             }
         } catch {
             print("Token decoding error: \(error)")
-            if let responseString = String(data: data, encoding: .utf8) {
+            if let responseString = String(data: data, encoding: String.Encoding.utf8) {
                 print("Response: \(responseString)")
             }
         }
