@@ -19,7 +19,7 @@ A sleek, elegant macOS widget that displays your currently playing Spotify track
 
 - macOS 11 Big Sur or later
 - [Spotify](https://www.spotify.com/download/) desktop app installed
-- A Spotify account (free or premium)
+- A Spotify Premium account (free accounts have limited API functionality)
 - Xcode 13+ for building the project
 
 ## Installation
@@ -152,6 +152,18 @@ The app consists of two main components:
 The app uses a hybrid approach for reliability:
 1. **Primary Method**: Spotify Web API for rich data and remote control
 2. **Fallback Method**: Local AppleScript commands when API calls fail
+
+## Project Status & Collaboration
+
+This project is currently under active development. I am looking for collaboration with someone who has an Apple Developer account to:
+
+1. Extend functionality to include Apple Music support
+2. Notarize the app for commercial distribution
+3. Help with App Store submission process
+
+If you're interested in collaborating on this project, please reach out! Your expertise with Apple's developer ecosystem would be invaluable for taking this widget to the next level.
+
+**Note**: To run and test this widget, you will need to use Xcode. The widget cannot be run independently without building through Xcode due to Apple's security requirements.
 
 ## Privacy
 
