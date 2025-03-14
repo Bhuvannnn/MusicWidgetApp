@@ -311,6 +311,11 @@ public struct SpotifyAPI {
                 songData["isPlaying"] = !isPlaying
                 saveToFile(songData: songData)
                 print("SpotifyAPI: Updated local isPlaying state to: \(!isPlaying)")
+                
+                // Force widget refresh immediately
+                DispatchQueue.main.async {
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
             }
         }
         
@@ -318,13 +323,13 @@ public struct SpotifyAPI {
         _ = executeAppleScript("playpause")
         print("SpotifyAPI: Executed playpause via AppleScript")
         
-        // Force widget refresh
+        // Force widget refresh immediately after command
         DispatchQueue.main.async {
             WidgetCenter.shared.reloadAllTimelines()
         }
         
-        // Fetch the latest track info after the action
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Fetch the latest track info after the action with shorter delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             fetchNowPlaying { _, _, _, _ in
                 WidgetCenter.shared.reloadAllTimelines()
             }
@@ -380,6 +385,18 @@ public struct SpotifyAPI {
                     let endpoint = isPlaying ? "pause" : "play"
                     print("SpotifyAPI: Current state is \(isPlaying ? "playing" : "paused"), sending \(endpoint) command")
                     
+                    // Update our cache with the toggled state immediately
+                    if var songData = loadFromFile() as? [String: Any] {
+                        songData["isPlaying"] = !isPlaying
+                        saveToFile(songData: songData)
+                        print("SpotifyAPI: Updated isPlaying state to \(!isPlaying)")
+                        
+                        // Force widget refresh immediately
+                        DispatchQueue.main.async {
+                            WidgetCenter.shared.reloadAllTimelines()
+                        }
+                    }
+                    
                     // Create a new request for the play/pause action
                     var actionRequest = URLRequest(url: URL(string: "https://api.spotify.com/v1/me/player/\(endpoint)")!)
                     actionRequest.httpMethod = "PUT"
@@ -395,11 +412,16 @@ public struct SpotifyAPI {
                             print("SpotifyAPI: \(endpoint) command response: \(actionHttpResponse.statusCode)")
                             
                             if actionHttpResponse.statusCode == 204 {
-                                // Success - update our stored state
-                                if var songData = loadFromFile() as? [String: Any] {
-                                    songData["isPlaying"] = !isPlaying
-                                    saveToFile(songData: songData)
-                                    print("SpotifyAPI: Updated isPlaying state to \(!isPlaying)")
+                                // Success - refresh widget again
+                                DispatchQueue.main.async {
+                                    WidgetCenter.shared.reloadAllTimelines()
+                                }
+                                
+                                // Fetch latest track info with shorter delay
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    fetchNowPlaying { _, _, _, _ in
+                                        WidgetCenter.shared.reloadAllTimelines()
+                                    }
                                 }
                             } else {
                                 print("SpotifyAPI: Failed to \(endpoint) with status \(actionHttpResponse.statusCode)")
@@ -457,8 +479,8 @@ public struct SpotifyAPI {
         _ = executeAppleScript("next track")
         print("SpotifyAPI: Executed next track via AppleScript")
         
-        // Fetch the latest track info after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Fetch the latest track info after a shorter delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             fetchNowPlaying { _, _, _, _ in
                 // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
@@ -479,6 +501,17 @@ public struct SpotifyAPI {
         request.httpMethod = "POST"
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
+        // Update loading state immediately
+        if var songData = loadFromFile() as? [String: Any] {
+            songData["loading"] = true
+            saveToFile(songData: songData)
+            
+            // Force widget refresh with loading state
+            DispatchQueue.main.async {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+        
         URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
                 print("SpotifyAPI: Error sending next track command: \(error.localizedDescription)")
@@ -489,29 +522,17 @@ public struct SpotifyAPI {
                 print("SpotifyAPI: Next track command response: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode == 204 {
-                    // Success - update our loading state
-                    if var songData = loadFromFile() as? [String: Any] {
-                        songData["loading"] = true
-                        saveToFile(songData: songData)
-                        print("SpotifyAPI: Set loading state for next track")
-                        
-                        // Force widget refresh with loading state
-                        DispatchQueue.main.async {
-                            WidgetCenter.shared.reloadAllTimelines()
-                        }
-                        
-                        // Wait a moment then fetch the updated track info
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            fetchNowPlaying { _, _, _, _ in
-                                // Clear loading state
-                                if var updatedSongData = loadFromFile() as? [String: Any] {
-                                    updatedSongData["loading"] = false
-                                    saveToFile(songData: updatedSongData)
-                                }
-                                
-                                // Refresh widget again with new track
-                                WidgetCenter.shared.reloadAllTimelines()
+                    // Wait a shorter moment then fetch the updated track info
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        fetchNowPlaying { _, _, _, _ in
+                            // Clear loading state
+                            if var updatedSongData = loadFromFile() as? [String: Any] {
+                                updatedSongData["loading"] = nil
+                                saveToFile(songData: updatedSongData)
                             }
+                            
+                            // Refresh widget again with new track
+                            WidgetCenter.shared.reloadAllTimelines()
                         }
                     }
                 } else {
@@ -565,8 +586,8 @@ public struct SpotifyAPI {
         _ = executeAppleScript("previous track")
         print("SpotifyAPI: Executed previous track via AppleScript")
         
-        // Fetch the latest track info after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        // Fetch the latest track info after a shorter delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             fetchNowPlaying { _, _, _, _ in
                 // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
@@ -587,6 +608,17 @@ public struct SpotifyAPI {
         request.httpMethod = "POST"
         request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
+        // Update loading state immediately
+        if var songData = loadFromFile() as? [String: Any] {
+            songData["loading"] = true
+            saveToFile(songData: songData)
+            
+            // Force widget refresh with loading state
+            DispatchQueue.main.async {
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+        
         URLSession.shared.dataTask(with: request) { _, response, error in
             if let error = error {
                 print("SpotifyAPI: Error sending previous track command: \(error.localizedDescription)")
@@ -597,29 +629,17 @@ public struct SpotifyAPI {
                 print("SpotifyAPI: Previous track command response: \(httpResponse.statusCode)")
                 
                 if httpResponse.statusCode == 204 {
-                    // Success - update our loading state
-                    if var songData = loadFromFile() as? [String: Any] {
-                        songData["loading"] = true
-                        saveToFile(songData: songData)
-                        print("SpotifyAPI: Set loading state for previous track")
-                        
-                        // Force widget refresh with loading state
-                        DispatchQueue.main.async {
-                            WidgetCenter.shared.reloadAllTimelines()
-                        }
-                        
-                        // Wait a moment then fetch the updated track info
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            fetchNowPlaying { _, _, _, _ in
-                                // Clear loading state
-                                if var updatedSongData = loadFromFile() as? [String: Any] {
-                                    updatedSongData["loading"] = false
-                                    saveToFile(songData: updatedSongData)
-                                }
-                                
-                                // Refresh widget again with new track
-                                WidgetCenter.shared.reloadAllTimelines()
+                    // Wait a shorter moment then fetch the updated track info
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        fetchNowPlaying { _, _, _, _ in
+                            // Clear loading state
+                            if var updatedSongData = loadFromFile() as? [String: Any] {
+                                updatedSongData["loading"] = nil
+                                saveToFile(songData: updatedSongData)
                             }
+                            
+                            // Refresh widget again with new track
+                            WidgetCenter.shared.reloadAllTimelines()
                         }
                     }
                 } else {
