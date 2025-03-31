@@ -62,7 +62,37 @@ public struct SpotifyAPI {
             return nil
         }
     }
-    
+
+    // MARK: - Widget Settings File Handling
+
+    static func saveWidgetSettingsToFile(settings: [String: Any]) {
+        let settingsURL = containerURL.appendingPathComponent("widgetSettings.json")
+        do {
+            let data = try JSONSerialization.data(withJSONObject: settings, options: [.prettyPrinted])
+            try data.write(to: settingsURL)
+            print("Widget settings saved to file: \(settingsURL.path)")
+        } catch {
+            print("Error saving widget settings to file: \(error)")
+        }
+    }
+
+    static func loadWidgetSettingsFromFile() -> [String: Any]? {
+        let settingsURL = containerURL.appendingPathComponent("widgetSettings.json")
+        guard FileManager.default.fileExists(atPath: settingsURL.path) else {
+            print("No widget settings file found.")
+            return nil // Return nil if file doesn't exist (use defaults)
+        }
+        do {
+            let data = try Data(contentsOf: settingsURL)
+            let settings = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+            print("Widget settings loaded from file.")
+            return settings
+        } catch {
+            print("Error loading widget settings from file: \(error)")
+            return nil
+        }
+    }
+
     // MARK: - Image Caching
     
     static func cacheImageFromURL(_ urlString: String, completion: @escaping (URL?) -> Void) {
@@ -140,10 +170,11 @@ public struct SpotifyAPI {
     
     // MARK: - Spotify API calls
     
-    public static func fetchNowPlaying(completion: @escaping (String?, String?, URL?, Error?) -> Void) {
+    // Updated completion handler to include albumName
+    public static func fetchNowPlaying(completion: @escaping (String?, String?, String?, URL?, Error?) -> Void) {
         guard let token = userDefaults.string(forKey: accessTokenKey) else {
             print("SpotifyAPI: No access token found")
-            completion(nil, nil, nil, NSError(domain: "SpotifyAPI", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"]))
+            completion(nil, nil, nil, nil, NSError(domain: "SpotifyAPI", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"]))
             return
         }
 
@@ -157,7 +188,7 @@ public struct SpotifyAPI {
             // Check for connection errors
             if let error = error {
                 print("SpotifyAPI: Network error: \(error.localizedDescription)")
-                completion(nil, nil, nil, error)
+                completion(nil, nil, nil, nil, error)
                 return
             }
             
@@ -168,21 +199,23 @@ public struct SpotifyAPI {
                 if httpResponse.statusCode == 204 {
                     // 204 No Content means nothing is playing
                     print("SpotifyAPI: No track currently playing")
-                    completion(nil, nil, nil, nil)
+                    // Clear existing data file if nothing is playing
+                    saveToFile(songData: ["isPlaying": false, "timestamp": Date().timeIntervalSince1970])
+                    completion(nil, nil, nil, nil, nil)
                     return
                 }
                 
                 if httpResponse.statusCode == 401 {
                     // 401 Unauthorized means the token is expired
                     print("SpotifyAPI: Token expired")
-                    completion(nil, nil, nil, NSError(domain: "SpotifyAPI", code: 401, userInfo: [NSLocalizedDescriptionKey: "Authentication expired"]))
+                    completion(nil, nil, nil, nil, NSError(domain: "SpotifyAPI", code: 401, userInfo: [NSLocalizedDescriptionKey: "Authentication expired"]))
                     return
                 }
                 
                 if httpResponse.statusCode != 200 {
                     // Any other non-200 status is an error
                     print("SpotifyAPI: Error status code: \(httpResponse.statusCode)")
-                    completion(nil, nil, nil, NSError(domain: "SpotifyAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "API error"]))
+                    completion(nil, nil, nil, nil, NSError(domain: "SpotifyAPI", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: "API error"]))
                     return
                 }
             }
@@ -190,7 +223,7 @@ public struct SpotifyAPI {
             // Check if we have data
             guard let data = data, !data.isEmpty else {
                 print("SpotifyAPI: No data received")
-                completion(nil, nil, nil, NSError(domain: "SpotifyAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"]))
+                completion(nil, nil, nil, nil, NSError(domain: "SpotifyAPI", code: 0, userInfo: [NSLocalizedDescriptionKey: "No data received"]))
                 return
             }
             
@@ -200,7 +233,7 @@ public struct SpotifyAPI {
                 // Check if we have a valid track item
                 guard let item = json?["item"] as? [String: Any] else {
                     print("SpotifyAPI: No track item in response")
-                    completion(nil, nil, nil, nil)
+                    completion(nil, nil, nil, nil, nil)
                     return
                 }
                 
@@ -208,11 +241,12 @@ public struct SpotifyAPI {
                 let artists = item["artists"] as? [[String: Any]]
                 let artistName = artists?.first?["name"] as? String
                 let album = item["album"] as? [String: Any]
+                let albumName = album?["name"] as? String // Extract album name
                 let images = album?["images"] as? [[String: Any]]
                 let imageUrlString = images?.first?["url"] as? String
                 let albumArtworkURL = imageUrlString != nil ? URL(string: imageUrlString!) : nil
                 
-                print("SpotifyAPI: Successfully parsed track - \(songTitle ?? "Unknown") by \(artistName ?? "Unknown")")
+                print("SpotifyAPI: Successfully parsed track - \(songTitle ?? "Unknown") by \(artistName ?? "Unknown") from album \(albumName ?? "Unknown")")
                 
                 // Cache the album artwork image if available
                 if let imageURLString = imageUrlString {
@@ -220,16 +254,17 @@ public struct SpotifyAPI {
                         let songData: [String: Any] = [
                             "songTitle": songTitle as Any,
                             "artistName": artistName as Any,
+                            "albumName": albumName as Any, // Save album name
                             "albumArtworkURL": imageURLString as Any,
                             "localImagePath": cachedURL?.path as Any,
                             "timestamp": Date().timeIntervalSince1970,
-                            "isPlaying": json?["is_playing"] as? Bool ?? true
+                            "isPlaying": json?["is_playing"] as? Bool ?? true,
+                            "loading": false // Ensure loading state is cleared
                         ]
-                        
                         saveToFile(songData: songData)
                         
                         DispatchQueue.main.async {
-                            completion(songTitle, artistName, albumArtworkURL, nil)
+                            completion(songTitle, artistName, albumName, albumArtworkURL, nil)
                         }
                     }
                 } else {
@@ -237,20 +272,22 @@ public struct SpotifyAPI {
                     let songData: [String: Any] = [
                         "songTitle": songTitle as Any,
                         "artistName": artistName as Any,
+                        "albumName": albumName as Any, // Save album name
                         "albumArtworkURL": NSNull(),
+                        "localImagePath": NSNull(), // Ensure local path is null
                         "timestamp": Date().timeIntervalSince1970,
-                        "isPlaying": json?["is_playing"] as? Bool ?? true
+                        "isPlaying": json?["is_playing"] as? Bool ?? true,
+                        "loading": false // Ensure loading state is cleared
                     ]
-                    
                     saveToFile(songData: songData)
                     
                     DispatchQueue.main.async {
-                completion(songTitle, artistName, albumArtworkURL, nil)
+                completion(songTitle, artistName, albumName, albumArtworkURL, nil)
                     }
                 }
             } catch {
                 print("SpotifyAPI: JSON parsing error: \(error)")
-                completion(nil, nil, nil, error)
+                completion(nil, nil, nil, nil, error)
             }
         }.resume()
     }
@@ -330,7 +367,7 @@ public struct SpotifyAPI {
         
         // Fetch the latest track info after the action with shorter delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            fetchNowPlaying { _, _, _, _ in
+            fetchNowPlaying { _, _, _, _,_  in
                 WidgetCenter.shared.reloadAllTimelines()
             }
         }
@@ -419,7 +456,7 @@ public struct SpotifyAPI {
                                 
                                 // Fetch latest track info with shorter delay
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                    fetchNowPlaying { _, _, _, _ in
+                                    fetchNowPlaying { _, _, _, _,_  in
                                         WidgetCenter.shared.reloadAllTimelines()
                                     }
                                 }
@@ -481,7 +518,7 @@ public struct SpotifyAPI {
         
         // Fetch the latest track info after a shorter delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            fetchNowPlaying { _, _, _, _ in
+            fetchNowPlaying { _, _, _, _,_  in
                 // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
                     songData["loading"] = nil
@@ -524,7 +561,7 @@ public struct SpotifyAPI {
                 if httpResponse.statusCode == 204 {
                     // Wait a shorter moment then fetch the updated track info
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        fetchNowPlaying { _, _, _, _ in
+                        fetchNowPlaying { _, _, _, _,_  in
                             // Clear loading state
                             if var updatedSongData = loadFromFile() as? [String: Any] {
                                 updatedSongData["loading"] = nil
@@ -588,7 +625,7 @@ public struct SpotifyAPI {
         
         // Fetch the latest track info after a shorter delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            fetchNowPlaying { _, _, _, _ in
+            fetchNowPlaying { _, _, _, _,_  in
                 // Clear loading state and refresh widget
                 if var songData = loadFromFile() as? [String: Any] {
                     songData["loading"] = nil
@@ -631,7 +668,7 @@ public struct SpotifyAPI {
                 if httpResponse.statusCode == 204 {
                     // Wait a shorter moment then fetch the updated track info
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                        fetchNowPlaying { _, _, _, _ in
+                        fetchNowPlaying { _, _, _, _,_  in
                             // Clear loading state
                             if var updatedSongData = loadFromFile() as? [String: Any] {
                                 updatedSongData["loading"] = nil

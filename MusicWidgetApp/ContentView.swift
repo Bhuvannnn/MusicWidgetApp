@@ -1,6 +1,25 @@
 import SwiftUI
 import WidgetKit
 
+// Define keys for AppStorage used by both app and widget
+struct AppStorageKeys {
+    static let widgetTheme = "widgetTheme"
+    static let widgetTransparency = "widgetTransparency"
+    static let showAlbumArt = "showAlbumArt"
+    static let showArtistName = "showArtistName"
+    static let showAlbumName = "showAlbumName" // Added for album name visibility
+}
+
+// Define theme options
+enum WidgetTheme: String, CaseIterable, Identifiable {
+    case system = "System"
+    case light = "Light"
+    case dark = "Dark"
+    // Consider adding more themes later if desired
+    
+    var id: String { self.rawValue }
+}
+
 struct ContentView: View {
     @StateObject private var auth = SpotifyAuth.shared
     @State private var songTitle: String?
@@ -9,8 +28,12 @@ struct ContentView: View {
     @State private var lastUpdateTime: Date = Date()
     @State private var isLoading: Bool = false
     
-    // Use the same UserDefaults instance throughout (still needed for token storage)
-    private let sharedUserDefaults = UserDefaults(suiteName: "group.com.yourname.MusicWidgetApp")!
+    // State variables for widget settings (replacing AppStorage)
+    @State private var widgetTheme: WidgetTheme = .system
+    @State private var widgetTransparency: Double = 1.0
+    @State private var showAlbumArt: Bool = true
+    @State private var showArtistName: Bool = true
+    @State private var showAlbumName: Bool = true
 
     var body: some View {
         VStack {
@@ -62,7 +85,39 @@ struct ContentView: View {
                     }
                     
                     Divider().padding(.vertical, 8)
-                    
+
+                    // --- START: Widget Customization Form ---
+                    Form {
+                        Section("Widget Appearance") {
+                            Picker("Theme", selection: $widgetTheme) {
+                                ForEach(WidgetTheme.allCases) { theme in
+                                    Text(theme.rawValue).tag(theme)
+                                }
+                            }
+                            .pickerStyle(.segmented) // Use segmented style for fewer options
+
+                            HStack {
+                                Text("Transparency")
+                                Slider(value: $widgetTransparency, in: 0.3...1.0) // Min 30% opacity
+                            }
+
+                            Toggle("Show Album Art", isOn: $showAlbumArt)
+                            Toggle("Show Artist Name", isOn: $showArtistName)
+                            Toggle("Show Album Name", isOn: $showAlbumName) // Added toggle
+                        }
+                    }
+                    // Save settings and trigger widget refresh when any customization setting changes
+                    .onChange(of: widgetTheme) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    .onChange(of: widgetTransparency) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    .onChange(of: showAlbumArt) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    .onChange(of: showArtistName) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    .onChange(of: showAlbumName) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    .frame(maxHeight: 280) // Adjust height as needed
+                    .padding(.bottom) // Add some space below the form
+                    // --- END: Widget Customization Form ---
+
+                    // Removed the extra divider here, the Form provides separation
+
                     VStack(spacing: 12) {
                         Button("Log Out") {
                             print("Logging out...")
@@ -115,8 +170,9 @@ struct ContentView: View {
                 fetchNowPlaying()
                 startTimer()
                 
-                // Try to load any existing data
+                // Try to load any existing song data and widget settings
                 loadStoredSongData()
+                loadWidgetSettings()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .spotifyAuthChanged)) { _ in
@@ -132,11 +188,51 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Settings Load/Save
+
+    private func loadWidgetSettings() {
+        guard let settings = SpotifyAPI.loadWidgetSettingsFromFile() else {
+            print("No saved widget settings found, using defaults.")
+            return
+        }
+        
+        print("Loading widget settings from file...")
+        if let themeRawValue = settings[AppStorageKeys.widgetTheme] as? String,
+           let theme = WidgetTheme(rawValue: themeRawValue) {
+            self.widgetTheme = theme
+        }
+        if let transparency = settings[AppStorageKeys.widgetTransparency] as? Double {
+            self.widgetTransparency = transparency
+        }
+        if let showArt = settings[AppStorageKeys.showAlbumArt] as? Bool {
+            self.showAlbumArt = showArt
+        }
+        if let showArtist = settings[AppStorageKeys.showArtistName] as? Bool {
+            self.showArtistName = showArtist
+        }
+        if let showAlbum = settings[AppStorageKeys.showAlbumName] as? Bool {
+            self.showAlbumName = showAlbum
+        }
+    }
+
+    private func saveWidgetSettings() {
+        let settings: [String: Any] = [
+            AppStorageKeys.widgetTheme: widgetTheme.rawValue,
+            AppStorageKeys.widgetTransparency: widgetTransparency,
+            AppStorageKeys.showAlbumArt: showAlbumArt,
+            AppStorageKeys.showArtistName: showArtistName,
+            AppStorageKeys.showAlbumName: showAlbumName
+        ]
+        SpotifyAPI.saveWidgetSettingsToFile(settings: settings)
+    }
+
+    // MARK: - Spotify Data Handling
     private func fetchNowPlaying() {
         print("Fetching now playing data in ContentView...")
         isLoading = true
         
-        SpotifyAPI.fetchNowPlaying { songTitle, artistName, albumArtworkURL, error in
+        // Updated closure signature to include albumName (which we don't use in this view yet, but need for the signature)
+        SpotifyAPI.fetchNowPlaying { songTitle, artistName, albumName, albumArtworkURL, error in
             isLoading = false
             
             if let error = error {
