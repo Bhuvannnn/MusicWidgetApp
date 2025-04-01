@@ -4,7 +4,7 @@ import WidgetKit
 // Define keys for AppStorage used by both app and widget
 struct AppStorageKeys {
     static let widgetTheme = "widgetTheme"
-    static let widgetTransparency = "widgetTransparency"
+    // static let widgetTransparency = "widgetTransparency" // Removed
     static let showAlbumArt = "showAlbumArt"
     static let showArtistName = "showArtistName"
     static let showAlbumName = "showAlbumName" // Added for album name visibility
@@ -30,7 +30,7 @@ struct ContentView: View {
     
     // State variables for widget settings (replacing AppStorage)
     @State private var widgetTheme: WidgetTheme = .system
-    @State private var widgetTransparency: Double = 1.0
+    // @State private var widgetTransparency: Double = 1.0 // Removed
     @State private var showAlbumArt: Bool = true
     @State private var showArtistName: Bool = true
     @State private var showAlbumName: Bool = true
@@ -96,10 +96,7 @@ struct ContentView: View {
                             }
                             .pickerStyle(.segmented) // Use segmented style for fewer options
 
-                            HStack {
-                                Text("Transparency")
-                                Slider(value: $widgetTransparency, in: 0.3...1.0) // Min 30% opacity
-                            }
+                            // Transparency Slider Removed
 
                             Toggle("Show Album Art", isOn: $showAlbumArt)
                             Toggle("Show Artist Name", isOn: $showArtistName)
@@ -108,7 +105,7 @@ struct ContentView: View {
                     }
                     // Save settings and trigger widget refresh when any customization setting changes
                     .onChange(of: widgetTheme) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
-                    .onChange(of: widgetTransparency) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
+                    // .onChange(of: widgetTransparency) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() } // Removed
                     .onChange(of: showAlbumArt) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
                     .onChange(of: showArtistName) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
                     .onChange(of: showAlbumName) { _, newValue in saveWidgetSettings(); forceWidgetRefresh() }
@@ -201,9 +198,7 @@ struct ContentView: View {
            let theme = WidgetTheme(rawValue: themeRawValue) {
             self.widgetTheme = theme
         }
-        if let transparency = settings[AppStorageKeys.widgetTransparency] as? Double {
-            self.widgetTransparency = transparency
-        }
+        // Removed transparency loading
         if let showArt = settings[AppStorageKeys.showAlbumArt] as? Bool {
             self.showAlbumArt = showArt
         }
@@ -218,7 +213,7 @@ struct ContentView: View {
     private func saveWidgetSettings() {
         let settings: [String: Any] = [
             AppStorageKeys.widgetTheme: widgetTheme.rawValue,
-            AppStorageKeys.widgetTransparency: widgetTransparency,
+            // AppStorageKeys.widgetTransparency: widgetTransparency, // Removed
             AppStorageKeys.showAlbumArt: showAlbumArt,
             AppStorageKeys.showArtistName: showArtistName,
             AppStorageKeys.showAlbumName: showAlbumName

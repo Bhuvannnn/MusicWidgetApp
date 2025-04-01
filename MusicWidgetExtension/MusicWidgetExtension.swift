@@ -6,7 +6,7 @@ import SwiftUI
 // (Alternatively, move these to a shared file/framework if the project grows)
 struct AppStorageKeys {
     static let widgetTheme = "widgetTheme"
-    static let widgetTransparency = "widgetTransparency"
+    // static let widgetTransparency = "widgetTransparency" // Removed
     static let showAlbumArt = "showAlbumArt"
     static let showArtistName = "showArtistName"
     static let showAlbumName = "showAlbumName"
@@ -33,7 +33,7 @@ struct MusicWidgetEntry: TimelineEntry {
 
     // Add settings properties to the entry
     let widgetTheme: WidgetTheme
-    let widgetTransparency: Double
+    // let widgetTransparency: Double // Removed
     let showAlbumArt: Bool
     let showArtistName: Bool
     let showAlbumName: Bool
@@ -54,7 +54,7 @@ struct Provider: AppIntentTimelineProvider {
             debugMessage: "Placeholder",
             // Default settings for placeholder
             widgetTheme: .system,
-            widgetTransparency: 1.0,
+            // widgetTransparency: 1.0, // Removed
             showAlbumArt: true,
             showArtistName: true,
             showAlbumName: true
@@ -87,11 +87,12 @@ struct Provider: AppIntentTimelineProvider {
         let settings = SpotifyAPI.loadWidgetSettingsFromFile() ?? [:]
         let themeRawValue = settings[AppStorageKeys.widgetTheme] as? String
         let widgetTheme = WidgetTheme(rawValue: themeRawValue ?? WidgetTheme.system.rawValue) ?? .system
-        let widgetTransparency = settings[AppStorageKeys.widgetTransparency] as? Double ?? 1.0
+        // let widgetTransparency = settings[AppStorageKeys.widgetTransparency] as? Double ?? 1.0 // Removed
         let showAlbumArt = settings[AppStorageKeys.showAlbumArt] as? Bool ?? true
         let showArtistName = settings[AppStorageKeys.showArtistName] as? Bool ?? true
         let showAlbumName = settings[AppStorageKeys.showAlbumName] as? Bool ?? true
-        debugMsg += " Loaded Settings: Theme=\(widgetTheme.rawValue), Trans=\(widgetTransparency), Art=\(showAlbumArt), Artist=\(showArtistName), Album=\(showAlbumName)."
+        // Updated debug message
+        debugMsg += " Loaded Settings: Theme=\(widgetTheme.rawValue), Art=\(showAlbumArt), Artist=\(showArtistName), Album=\(showAlbumName)."
 
         // Try to load from file
         if let songData = SpotifyAPI.loadFromFile() {
@@ -132,7 +133,7 @@ struct Provider: AppIntentTimelineProvider {
                 debugMessage: debugMsg,
                 // Pass loaded settings to entry
                 widgetTheme: widgetTheme,
-                widgetTransparency: widgetTransparency,
+                // widgetTransparency: widgetTransparency, // Removed
                 showAlbumArt: showAlbumArt,
                 showArtistName: showArtistName,
                 showAlbumName: showAlbumName
@@ -154,7 +155,7 @@ struct Provider: AppIntentTimelineProvider {
                 debugMessage: debugMsg,
                 // Pass loaded settings (or defaults) to entry
                 widgetTheme: widgetTheme,
-                widgetTransparency: widgetTransparency,
+                // widgetTransparency: widgetTransparency, // Removed
                 showAlbumArt: showAlbumArt,
                 showArtistName: showArtistName,
                 showAlbumName: showAlbumName
@@ -300,7 +301,7 @@ struct MusicWidgetExtensionEntryView: View {
         }
         .padding()
         // Apply background based on theme and transparency
-        .containerBackground(containerBackgroundView(), for: .widget)
+        .containerBackground(containerBackgroundColor(), for: .widget) // Use renamed function
         // Apply the effective color scheme to the content
         .environment(\.colorScheme, effectiveColorScheme)
     }
@@ -339,22 +340,15 @@ struct MusicWidgetExtensionEntryView: View {
             .frame(width: albumArtSize, height: albumArtSize) // Ensure frame is applied
     }
 
-    // Determine the background ShapeStyle based on theme settings
-    // Use entry settings for background
-    private func containerBackgroundView() -> Color {
-        let baseColor: Color = {
-            switch entry.widgetTheme { // Use entry.widgetTheme
-            case .light: return .white
-            case .dark: return .black
-            case .system:
-                // Use system background colors which adapt automatically
-                // Using specific colors for better control than windowBackgroundColor
-                 return colorScheme == .dark ? Color(nsColor: .underPageBackgroundColor) : Color(nsColor: .textBackgroundColor) // Example system colors
-            }
-        }()
-
-        // Apply transparency from entry and return the Color
-        return baseColor.opacity(entry.widgetTransparency) // Use entry.widgetTransparency
+    // Determine the background Color based only on theme settings now
+    private func containerBackgroundColor() -> Color { // Renamed for clarity
+        switch entry.widgetTheme { // Use entry.widgetTheme
+        case .light: return .white
+        case .dark: return .black // Consider a slightly off-black like Color(white: 0.1)
+        case .system:
+             // Use system background colors which adapt automatically
+             return colorScheme == .dark ? Color(nsColor: .windowBackgroundColor) : Color(nsColor: .windowBackgroundColor) // Reverted to windowBackgroundColor for simplicity
+        }
     }
 }
 
