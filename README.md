@@ -8,8 +8,11 @@ A sleek, elegant macOS widget that displays your currently playing Spotify track
 
 ## Features
 
-- 🎵 Display currently playing track information (title, artist, album art)
+- 🎵 Display currently playing track information (title, artist, album name, album art)
 - ⏯️ Playback controls (play/pause, next track, previous track)
+- 🎨 Customizable Appearance:
+  - Choose between Light, Dark, or System themes.
+  - Show or hide Album Art, Artist Name, and Album Name.
 - 🔄 Auto-refreshing widget that updates when tracks change
 - 🔌 Hybrid control system using both Spotify Web API and AppleScript
 - 🔐 Secure authentication with Spotify
@@ -58,6 +61,11 @@ A sleek, elegant macOS widget that displays your currently playing Spotify track
 
 4. **Widget Updates**: The widget automatically refreshes every 5 seconds to show your current track
 
+5. **Customize Appearance**:
+   - Open the main `MusicWidgetApp` application.
+   - In the main window (after logging in), you'll find the "Widget Appearance" section.
+   - Use the controls to select a theme (Light/Dark/System) and toggle the visibility of Album Art, Artist Name, and Album Name.
+   - Changes should reflect in the widget shortly after modification (or use "Force Refresh Widget").
 ## Configuration
 
 ### Spotify API
