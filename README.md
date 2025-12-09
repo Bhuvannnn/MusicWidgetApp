@@ -2,7 +2,7 @@
 
 A sleek, elegant macOS widget that displays your currently playing Spotify track and provides playback controls right from your desktop.
 
-![Spotify Widget Screenshot](Screenshot/SS1_Widget_Small.png)
+<img src="Screenshot/SS1_Widget_Small.png" alt="Spotify Widget Screenshot" width="400" />
 <img src="Screenshot/project-8-Dseo5G0Y.png" alt="Spotify Widget Screenshot" width="400" />
 
 
